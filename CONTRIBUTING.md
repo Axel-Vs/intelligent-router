@@ -2,8 +2,8 @@
 First off, thank you for considering contributing to DialARideProblemSolver. 
 
 ## Getting Started
-Make sure you have a GitLab account.
-Open an issue or respond to an existing one [here](https://gitlab.com/users/sign_in).
+Make sure you have a GitLab account [here](https://github.com/).
+Open an issue or respond to an existing one .
 Fork the repository on GitLab.
 Making Changes
 Create a branch in your forked repository. The branch should be named something descriptive to the changes you'll be making.
