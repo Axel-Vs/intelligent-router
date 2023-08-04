@@ -11,7 +11,8 @@ The Dial-a-Ride Problem (DARP) is an optimization problem that involves the sche
 The project is developed using Python 3.8+. You'll need it installed on your system before proceeding.
 
 ### Installation
-Clone this repository to your local machine using git clone https://gitlab.com/Axel-Vs/DialARideProblemSolver.git
+Clone this repository to your local machine using git clone [git@github.com:Axel-Vs/DialARideSolver.git](https://github.com/Axel-Vs/DialARideSolver.git)
+
 Navigate to the project directory with cd DialARideProblemSolver.
 Install the required dependencies with pip install -r requirements.txt
 
