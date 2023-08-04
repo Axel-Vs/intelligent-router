@@ -2,9 +2,9 @@
 First off, thank you for considering contributing to DialARideProblemSolver. 
 
 ## Getting Started
-1. Make sure you have a GitLab account [here](https://github.com/). <br>
-2. Open an issue or respond to an existing one . <br>
-3. Fork the repository on GitLab.
+1. Make sure you have a GitHub account [GitHub account](https://github.com/). <br>
+2. Open an issue or respond to an existing one [here](https://github.com/Axel-Vs/DialARideProblemSolver/issues). <br>
+3. [Fork the repository on GitHub](https://github.com/Axel-Vs/DialARideProblemSolver/fork).
 
 ## Making Changes
 1. Create a branch in your forked repository. The branch should be named something descriptive to the changes you'll be making.
@@ -23,8 +23,8 @@ git push origin branch-name
 ```
 
 ## Submitting Changes
-Submit a merge request to the DialARideProblemSolver repository.
-After submission, your merge request will be reviewed. If there are any issues or changes needed, these will be discussed through the merge request.
+1. Submit a merge request to the DialARideProblemSolver repository. <br>
+2. After submission, your merge request will be reviewed. If there are any issues or changes needed, these will be discussed through the merge request.
 
 ## Need help?
 If you need help at any point or have any questions, feel free to open an issue.
