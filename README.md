@@ -18,7 +18,7 @@ git clone https://github.com/Axel-Vs/DialARideSolver.git
 
 2. Navigate to the project directory with
 ```{bash}
-cd DialARideProblemSolver
+cd DialARideSolver
 ```
 
 3. Install the required dependencies with
