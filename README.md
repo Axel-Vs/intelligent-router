@@ -1,10 +1,9 @@
-# DialARideSolver
-An implementation of various algorithms for the Dial-a-Ride Problem (DARP). Focused on optimizing vehicle routing and scheduling for ride-sharing services to minimize travel time and improve customer satisfaction.
+# Courier Services
+Courier services provide delivery of packages, documents, and mail from one location to another. Unlike regular mail services, they often offer more features such as express shipping, tracking, secure delivery, and specialization and individualization of express services. They are known for their speed, security, tracking, signature, specialization, and individualization of services, swift delivery times, and ability to handle valuable items. <br>
 
+Courier services can be utilized by businesses and individuals alike. Businesses often use these services to connect with their customers, deliver goods, and send critical documents quickly and securely. Individuals might use courier services for sending personal documents, delivering gifts, or shipping purchases or sales from online transactions.<br>
 
-## Overview
-The Dial-a-Ride Problem (DARP) is an optimization problem that involves the scheduling and routing of vehicles to pick up and deliver passengers while meeting a set of service constraints. This project tackles this problem by implementing various algorithms to provide an efficient solution, ultimately aiming to minimize travel time and improve customer satisfaction.
-
+In terms of logistics, courier services rely on a network of vehicles and transportation infrastructure to ensure timely and efficient delivery. <br>
 
 ## Getting Started
 ### Prerequisites
