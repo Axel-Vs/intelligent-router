@@ -28,8 +28,11 @@ pip install -r requirements.txt
 
 
 ## Algorithms
-This project implements the following algorithms to solve the DARP:
-Quantum Annealing
+'*' Quantum Annealing: Quantum Annealing is a metaheuristic for finding the global minimum of a given objective function over a given set of candidate solutions. Quantum annealing uses quantum mechanics to perform optimization and search tasks far more efficiently than traditional methods. In this project, we apply Quantum Annealing to solve DARP by mapping the problem into a suitable Ising model, finding optimal solutions in a significantly reduced search space. <br>
+
+'*' CBC Solver: The Coin-or branch and cut (CBC) is an open-source linear programming solver that is part of the COIN-OR project. It is a highly efficient algorithm used for solving linear programming problems, mixed integer programming (MIP), and other related problems. For the DARP, we utilize CBC to model and solve the problem as a MIP. By doing so, we can find optimal or near-optimal solutions within reasonable computational time. <br>
+
+Each of these algorithms presents its own benefits and trade-offs. Quantum Annealing provides a quantum-computational approach that can potentially find optimal solutions in a reduced search space, while the CBC Solver uses traditional mathematical programming techniques that are proven to be effective for such combinatorial problems.
 
 
 ## Contributing
