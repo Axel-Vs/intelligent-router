@@ -1,0 +1,2 @@
+{"planning_horizon": 2, 
+ "Simulation_periods": ["2020-07-01", "2020-07-30"]}
