@@ -12,7 +12,6 @@ from graph_creator.graph_creator import Network
 from model.delivery_model import CVRPTW
 
 
-
 # import sys
 # from pathlib import Path
 
