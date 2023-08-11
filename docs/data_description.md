@@ -1,0 +1,57 @@
+# Dataset Explanation: Supply Chain Package Details
+
+This dataset contains information about various packages in a supply chain, including details about vendors, recipients, package attributes, and shipment timelines. The dataset is organized into columns, each representing a specific attribute of the packages. Below is an explanation of the columns present in the dataset:
+
+## Package-ID
+A unique identifier for each package.
+
+## Vendor Name
+The name of the vendor company responsible for sending the package.
+
+## Vendor Street
+The street address of the vendor's location.
+
+## Vendor Country Code
+The country code of the vendor's location.
+
+## Vendor Country Name
+The name of the country where the vendor is located.
+
+## Vendor Postcode
+The postal code of the vendor's location.
+
+## Vendor City
+The city where the vendor is located.
+
+## Recipient Name
+The name of the recipient or receiver of the package.
+
+## Recipient Street
+The street address of the recipient's location.
+
+## Recipient Country Code
+The country code of the recipient's location.
+
+## Recipient Country Name
+The name of the country where the recipient is located.
+
+## Recipient Postcode
+The postal code of the recipient's location.
+
+## Recipient City
+The city where the recipient is located.
+
+## Package Gross Weight
+The weight of the package in kilograms.
+
+## Package Dimensions in m3
+The volume of the package in cubic meters.
+
+## Package Loading Meters
+The length of loading space required for the package in meters.
+
+## Requested Loading Date
+The date and time when the package is requested to be loaded for shipment.
+
+## Requested Delivery Date
+The date and time when the package is requested to be delivered to the recipient.
