@@ -18,8 +18,8 @@ from utils.utils import *
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-class Network:
-    """Create Network & Time-Expanded Network according to the period of time given.
+class Graph:
+    """Create Graph & Time-Expanded Graph according to the period of time given.
     Input: Dictionary with all the business parameters / period
     """
     def __init__(self, params): 
@@ -45,8 +45,8 @@ class Network:
         # self.capacity_matrix = None
         self.solution = None
 
-    def export_network_to_csv(self, path = "./python_files/Networks/"):
-        """Export Network as 4 files that fully define it.
+    def export_network_to_csv(self, path = "./python_files/Graphs/"):
+        """Export Graph as 4 files that fully define it.
         """    
         folder_name = datetime.datetime.now()+"/"
         path = path+folder_name
@@ -75,13 +75,13 @@ class Network:
     #Paul:TODO: Implement
     def get_subset_of_network(self, first_day: int, last_day: int):
         """
-        Get a subset of a network for the rolling horizon scheduling
+        Get a subset of a Graph for the rolling horizon scheduling
         """
         return self.distance_matrix, self.time_distance_matrix, self.capacity_matrix, self.loading_matrix
 
     def update_wrt_solution(self, x: bool ,y: bool ,first_day: int, last_day: int, update_interval: int):
         """
-        Updates the (partial) network w.r.t. the (partial) solution from the model
+        Updates the (partial) Graph w.r.t. the (partial) solution from the model
         input:
             x = Solution variable of model. Boolean vector with: k,i,t,j,t'
             y = tbd
@@ -226,24 +226,24 @@ class Network:
         # Local Time Array
         if local == True:
             minimum_dt = d1
-            ext_days, Tau_hours, Tau = Network.time_definition(discretization_constant, d2, d1)        
+            ext_days, Tau_hours, Tau = Graph.time_definition(discretization_constant, d2, d1)        
         else:
         # Extend Time Array
             minimum_dt = d0
-            ext_days, Tau_hours, Tau = Network.time_definition(discretization_constant, dn, d0)
+            ext_days, Tau_hours, Tau = Graph.time_definition(discretization_constant, dn, d0)
 
         return maximum_consignee, minimum_dt, ext_days, Tau_hours, Tau
 
     def create_time_network(self, suppliers_df, init_simulation_date, end_simulation_date):
-        """Creates Time-Expanded Network
+        """Creates Time-Expanded Graph
         Input: 
         suppliers_df: Suppliers DataFrame.
         Output: 
-        T_ex: Time-Expanded Network.
+        T_ex: Time-Expanded Graph.
         time_network_index: Index of the Tau_hours vector (expanded).
         """
         # 1) Establish the index boundaries of the Time-Network.
-        maximum_consignee, self.min_date, self.tour_days, self.Tau_hours, Tau_index = Network.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, True, init_simulation_date, end_simulation_date)
+        maximum_consignee, self.min_date, self.tour_days, self.Tau_hours, Tau_index = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, True, init_simulation_date, end_simulation_date)
         self.min_day = self.min_date.day
         
         non_open_depot_index=np.where((np.array(self.Tau_hours)<self.starting_depot) | (np.array(self.Tau_hours)>self.closing_depot))
@@ -314,8 +314,8 @@ class Network:
         for i in self.Nodes:
             time_windows[i] = list(np.arange( e_inx[i], l_inx[i]+1, 1))
         
-        # 3) Creates the Expanded-Time Network.
-        log.info('Creating Time-Expanded Network...')
+        # 3) Creates the Expanded-Time Graph.
+        log.info('Creating Time-Expanded Graph...')
         T_ex = []
         maximum_values=[]
         for i in range(self.length):
@@ -392,7 +392,7 @@ class Network:
 
     def shift_time(self, index_to_shift, suppliers_df, init_simulation_date, end_simulation_date):
         # shift index to the overall time index matrix
-        maximum_consignee, min_date_overall, tour_days, Tau_hours_overall, Tau_index_overall = Network.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, False, init_simulation_date, end_simulation_date)
+        maximum_consignee, min_date_overall, tour_days, Tau_hours_overall, Tau_index_overall = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, False, init_simulation_date, end_simulation_date)
     
         current_time = self.min_date
         arrv_day = current_time.day
@@ -401,7 +401,7 @@ class Network:
 
     def update_time_expanded_network(self, time_expanded_network_local, suppliers_df, init_simulation_date, end_simulation_date):
         time_expanded_network_general = copy.deepcopy(time_expanded_network_local)
-        shift_value = Network.shift_time(self, 0, suppliers_df, init_simulation_date, end_simulation_date) 
+        shift_value = Graph.shift_time(self, 0, suppliers_df, init_simulation_date, end_simulation_date) 
         for i in range(len(time_expanded_network_local)):
             time_expanded_network_general[i][0][1] = time_expanded_network_local[i][0][1] + shift_value
             time_expanded_network_general[i][1][1] = time_expanded_network_local[i][1][1] + shift_value

@@ -7,8 +7,8 @@ project_root = Path(__file__).resolve().parent
 sys.path.append(str(project_root))
 
 # Import the modules from their respective directories
-from graph_creator.graph_creator import Network
-from model.delivery_model import CVRPTW
+from graph_creator.graph_creator import Graph
+from model.delivery_model import DeliveryOptimizer
 from utils.utils import *
 
 import pandas as pd
@@ -19,7 +19,7 @@ main_root = os.getcwd()
 
 # Define paths for configuration files, data, and results
 parameters_path = os.path.join(main_root, 'src/config')
-data_path = os.path.join(main_root, 'data/delivery_example.csv')  # Warning: File dates format '%d.%m.%yyyy %H:%M'
+data_path = os.path.join(main_root, 'data/amazon_test_dataset.csv')  # Warning: File dates format '%d.%m.%yyyy %H:%M'
 results_path = os.path.join(main_root, 'results/optimization')
 
 # Print initial message
@@ -47,10 +47,10 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
 
     # Iterate through simulation periods
     for period in periods:
-        # Create a network object
-        net = Network(network_params)
+        # Create a Graph object
+        net = Graph(network_params)
 
-        # Read data and create network for the given period
+        # Read data and create Graph for the given period
         complete_coordinates, suppliers_df = net.read_data([period[0], period[1]], df_geocoded)
 
         if len(suppliers_df) in range(1, 15):  # Check if orders are done in that period
@@ -59,8 +59,8 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
             print('End Simulation Date:    ', period[1])
             print('Length suppliers:', len(suppliers_df))
 
-            print('\n Create Network ----------------------------------------------------------------------------------------------------------------------------------------------------------')
-            # Create and discretize the network
+            print('\n Create Graph ----------------------------------------------------------------------------------------------------------------------------------------------------------')
+            # Create and discretize the Graph
             net.create_network(complete_coordinates, suppliers_df)
             net.discretize()
             time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(suppliers_df, period[0], period[1])
@@ -70,19 +70,19 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
             loading_matrix = loading_vector(suppliers_df)
 
             print('\n Solving -----------------------------------------------------------------------------------------------------------------------------------------------------------------')
-            # Create the CVRPTW model and solve it
-            cvrptw = CVRPTW([period[0], period[1]], net.discretization_constant, time_expanded_network, time_expanded_network_index, net.Tau_hours, net.distance_matrix,
+            # Create the DeliveryOptimizer model and solve it
+            deliveryoptimizer = DeliveryOptimizer([period[0], period[1]], net.discretization_constant, time_expanded_network, time_expanded_network_index, net.Tau_hours, net.distance_matrix,
                             net.disc_time_distance_matrix, capacity_matrix, loading_matrix, max_capacity=net.max_weight, max_ldms=net.max_ldms, max_driving=network_params["max_driving"],
                             is_gap=model_params['gap'], mip_gap=model_params["gap_value"], maximum_minutes=model_params['max_time'])
-            cvrptw.min_date = net.min_date  # Set the minimum date for printing the solution
+            deliveryoptimizer.min_date = net.min_date  # Set the minimum date for printing the solution
 
             # Create and solve the model
-            cvrptw.create_model(w)
-            status, connections_solution, vehicles_solution = cvrptw.solve_model()  # Get solutions
+            deliveryoptimizer.create_model(w)
+            status, connections_solution, vehicles_solution = deliveryoptimizer.solve_model()  # Get solutions
 
             # Print the solution status and save the solution
-            cvrptw.print_status(status, connections_solution, vehicles_solution)
-            cvrptw.save_solution(results_path)
+            deliveryoptimizer.print_status(status, connections_solution, vehicles_solution)
+            deliveryoptimizer.save_solution(results_path)
 
             print('\n Finish Iteration -----------------------------------------------------------------------------------------------------------------------------------------------------------------')
             print('')

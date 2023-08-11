@@ -1,61 +1,70 @@
+# Import necessary libraries
 import os
 import sys
 from pathlib import Path
 
+# Determine the project root directory
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
+# Import required modules
 from utils.utils import *
 from ortools.linear_solver import pywraplp
 from pyqubo import Array, Constraint, Placeholder
 
-
-class CVRPTW: 
-    def __init__(self, evaluation_period, discretization_constant, time_expanded_network, time_expanded_network_index, Tau_hours, distance_matrix, disc_time_distance_matrix, 
-                 capacity_matrix, loading_matrix, max_capacity, max_ldms, max_driving, is_gap, mip_gap, maximum_minutes):
+# Define the DeliveryOptimizer class
+class DeliveryOptimizer:
+    def __init__(self, evaluation_period, discretization_constant, time_expanded_network, time_expanded_network_index,
+                 Tau_hours, distance_matrix, disc_time_distance_matrix, capacity_matrix, loading_matrix,
+                 max_capacity, max_ldms, max_driving, is_gap, mip_gap, maximum_minutes):
+        # Log information about the MIP model setup
         log.info('Defining MIP model... ')
-        # Safe problem structure
+
+        # Set problem-specific attributes
         self.evaluation_period = evaluation_period
         self.discretization_constant = discretization_constant
         self.time_expanded_network = time_expanded_network
         self.time_expanded_network_index = time_expanded_network_index
-        self.Tau_hours = Tau_hours 
+        self.Tau_hours = Tau_hours
         self.distance_matrix = distance_matrix
         self.disc_time_distance_matrix = disc_time_distance_matrix
         self.capacity_matrix = capacity_matrix
         self.loading_matrix = loading_matrix
 
-        self.des_max_driving = max_driving/discretization_constant
-
-        self.length = len(self.distance_matrix) 
+        # Calculate derived attributes
+        self.des_max_driving = max_driving / discretization_constant
+        self.length = len(self.distance_matrix)
         self.max_num_vehicles = self.length - 1
 
+        # Log information about the problem size
         log.info('Number of nodes %i' % self.length)
         log.info('Solving for maximum number of %i vehicles...' % self.max_num_vehicles)
 
+        # Set maximum capacity and load limits for vehicles
         self.max_capacity = max_capacity
-        self.max_capacity_kg = [max_capacity*1000] * self.max_num_vehicles
-        
+        self.max_capacity_kg = [max_capacity * 1000] * self.max_num_vehicles
         self.max_ldms = max_ldms
         self.max_ldms_vc = [max_ldms] * self.max_num_vehicles
 
+        # Initialize solution containers
         self.connections_solution = None
         self.vehicles_solution = None
 
-        # Setup some solver configurations
-        self.model = pywraplp.Solver('CVRPTW',pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
-        self.model.set_time_limit(maximum_minutes*60*1000)  # miliseconds
+        # Create a solver instance with specified time limit
+        self.model = pywraplp.Solver('DeliveryOptimizer', pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
+        self.model.set_time_limit(maximum_minutes * 60 * 1000)  # milliseconds
 
+        # Configure solver based on MIP gap
         self.is_gap = is_gap
         if is_gap == True:
-            log.info('MIP GAP %s and maximum solving minutes %s...' %(mip_gap,maximum_minutes))            
+            log.info('MIP GAP %s and maximum solving minutes %s...' % (mip_gap, maximum_minutes))
             self.solverParams = pywraplp.MPSolverParameters()
-            self.solverParams.SetDoubleParam(self.solverParams.RELATIVE_MIP_GAP, mip_gap) 
-        
+            self.solverParams.SetDoubleParam(self.solverParams.RELATIVE_MIP_GAP, mip_gap)
+
 
     def create_model(self, w):
-        A_i, A_j, self.nodes = CVRPTW.nodes_range(self.time_expanded_network)
-        all_duples, index_out, index_ins, index_zero_ins = CVRPTW.nodes_expanded_points(self.time_expanded_network)
+        A_i, A_j, self.nodes = DeliveryOptimizer.nodes_range(self.time_expanded_network)
+        all_duples, index_out, index_ins, index_zero_ins = DeliveryOptimizer.nodes_expanded_points(self.time_expanded_network)
 
         self._defining_variables()
         self._add_constraint_nodes()
@@ -290,7 +299,7 @@ class CVRPTW:
         if status != pywraplp.Solver.INFEASIBLE:
             
             index_solution = information_index(self.y)
-            CVRPTW.print_solution(self, self.connections_solution, index_solution, self.discretization_constant, 
+            DeliveryOptimizer.print_solution(self, self.connections_solution, index_solution, self.discretization_constant, 
                                     self.min_date, self.Tau_hours, self.distance_matrix, 
                                     self.disc_time_distance_matrix, self.capacity_matrix, 
                                     self.loading_matrix)
@@ -423,8 +432,8 @@ class CVRPTW:
 
     def create_hamiltonian_model(self):
         log.info('Creating Hamiltonian Model (HF)...')   
-        A_i, A_j, self.nodes = CVRPTW.nodes_range(self.time_expanded_network)
-        all_duples, index_out, index_ins, index_zero_ins = CVRPTW.nodes_expanded_points(self.time_expanded_network)
+        A_i, A_j, self.nodes = DeliveryOptimizer.nodes_range(self.time_expanded_network)
+        all_duples, index_out, index_ins, index_zero_ins = DeliveryOptimizer.nodes_expanded_points(self.time_expanded_network)
 
         self._defining_hamiltonian_variables(A_i, A_j)
         H_0 = self._add_hamiltonian_min_function()
