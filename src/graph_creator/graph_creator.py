@@ -15,6 +15,7 @@ import openrouteservice as ors
 
 from utils.utils import *
 
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class Network:
