@@ -55,3 +55,11 @@ The date and time when the package is requested to be loaded for shipment.
 
 ## Requested Delivery Date
 The date and time when the package is requested to be delivered to the recipient.
+
+---
+
+**Dataset Location:** [Link to Dataset](https://example.com/path/to/dataset.csv)
+
+---
+
+**Disclaimer:** This dataset is for demonstration purposes only. Any resemblance to real entities or events is purely coincidental. The data has been masked and does not represent actual individuals, vendors, or recipients.
