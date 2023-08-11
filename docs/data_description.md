@@ -58,7 +58,8 @@ The date and time when the package is requested to be delivered to the recipient
 
 ---
 
-**Dataset Location:** [Link to Dataset](https://example.com/path/to/dataset.csv)
+**Dataset Location:** [Link to Dataset](https://github.com/Axel-Vs/parcel-delivery-solver/blob/4923c132f3622d744af4bb0e3c509722d0bca4b0/data/amazon_test_dataset.csv)
+
 
 ---
 
