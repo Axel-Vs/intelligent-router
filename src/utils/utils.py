@@ -77,17 +77,17 @@ def info_matrix_definition(coordinates, source_node, shape, client):
         time_mtrx = np.asarray(time_mtrx)
     return distance_mtrx, time_mtrx
 
-def cargo_vector(supplier_df):
+def cargo_vector(vendor_df):
     q = []
     q.append(0)
-    for i in supplier_df['Total Gross Weight']:
+    for i in vendor_df['Total Gross Weight']:
         q.append(i)
     return q
 
-def loading_vector(supplier_df):
+def loading_vector(vendor_df):
     m = []
     m.append(0)
-    for i in supplier_df['Calculated Loading Meters']:
+    for i in vendor_df['Calculated Loading Meters']:
         m.append(i)
     return m
 
@@ -99,7 +99,7 @@ def init_max_num_vehicles(n, q, max_weight):
     return max_num_vehicles
 
 ## ----------------------------------------------------------------------------------------------------------------------------------------
-def periods_generator(simulation_period, simulation_interval, supplier_start_hr, pickup_end_hr):
+def periods_generator(simulation_period, simulation_interval, vendor_start_hr, pickup_end_hr):
     start = simulation_period[0]
     end = simulation_period[1]
     delta = datetime.timedelta(days=simulation_interval)
@@ -111,11 +111,11 @@ def periods_generator(simulation_period, simulation_interval, supplier_start_hr,
     periods = []
     while t <= end :
         if t + delta < end:
-            periods.append( [t.replace(hour=supplier_start_hr).strftime("%Y-%m-%d %H:%M:%S"), 
+            periods.append( [t.replace(hour=vendor_start_hr).strftime("%Y-%m-%d %H:%M:%S"), 
                              (t + delta).replace(hour=pickup_end_hr + simulation_interval).strftime("%Y-%m-%d %H:%M:%S") ] )    
             t = t + (delta + datetime.timedelta(days=1) )
         else:
-            periods.append( [t.replace(hour=supplier_start_hr).strftime("%Y-%m-%d %H:%M:%S"), 
+            periods.append( [t.replace(hour=vendor_start_hr).strftime("%Y-%m-%d %H:%M:%S"), 
                              end.replace(hour=pickup_end_hr + simulation_interval).strftime("%Y-%m-%d %H:%M:%S")] )
 
             t = t + (delta + datetime.timedelta(days=1) )
@@ -186,9 +186,9 @@ def filter_dates_old(df, column_name, init_p, endg_p):
         
     return df_f, min_time, max_time
 
-def Time_set_wider_old(supplier_df, earliest_arrival, latest_arrival, discretization_constant ):
-    min_date = min(supplier_df['Requested Loading']) 
-    max_date = max(supplier_df['Requested Loading']) 
+def Time_set_wider_old(vendor_df, earliest_arrival, latest_arrival, discretization_constant ):
+    min_date = min(vendor_df['Requested Loading']) 
+    max_date = max(vendor_df['Requested Loading']) 
 
     min_dt = datetime.datetime.strptime(min_date, '%Y-%m-%d %H:%M:%S')
     max_dt = datetime.datetime.strptime(max_date, '%Y-%m-%d %H:%M:%S')
@@ -199,8 +199,8 @@ def Time_set_wider_old(supplier_df, earliest_arrival, latest_arrival, discretiza
     ext_days = ((d2-d1).days+1)
     ext_hours = ext_days*24
 
-    min_sup_arrival_time = int(d1.strftime("%H") )  # 24 hours before minimum arrival time on supplier
-    max_dep_arrival_time = int(d2.strftime("%H") )  # 24 hours after maximum arrival time on supplier
+    min_sup_arrival_time = int(d1.strftime("%H") )  # 24 hours before minimum arrival time on vendor
+    max_dep_arrival_time = int(d2.strftime("%H") )  # 24 hours after maximum arrival time on vendor
 
     Tau_hours = np.arange(min_sup_arrival_time, 
                           max_dep_arrival_time + ext_hours + discretization_constant, 
@@ -220,8 +220,8 @@ def Time_set_wider_old(supplier_df, earliest_arrival, latest_arrival, discretiza
     return d1, d2, ext_days, Tau_hours, Tau   
 
 ## ----------------------------------------------------------------------------------------------------------------------------------------
-def cr_nodes(supplier_df):    
-    return list(np.arange( 0, len(supplier_df)+1, 1))
+def cr_nodes(vendor_df):    
+    return list(np.arange( 0, len(vendor_df)+1, 1))
 
 # Time Matrix ----------------------------------------------------------------------------
 def discret_time_matrix_old(time_matrix, discretization_constant):    

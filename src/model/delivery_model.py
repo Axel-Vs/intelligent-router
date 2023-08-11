@@ -101,7 +101,7 @@ class DeliveryOptimizer:
         A_i: Leaving Nodes to consider.
         A_j: Arriving Nodes to consider.
         all_duples: List of of the duples (Node-i,Time-t) on the Time-Expanded Network. Includes arrival and leaving points.
-        index_zero_ins: Extracts the arrival time-network points to the Consignee.
+        index_zero_ins: Extracts the arrival time-network points to the recipient.
         """
         A_i=[]
         A_j=[]

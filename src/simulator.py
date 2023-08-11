@@ -32,9 +32,9 @@ network_params, model_params, simulation_params = import_parameters(parameters_p
 
 # Generate time periods for the simulation
 periods = periods_generator(simulation_params["Simulation_periods"],
-                                  simulation_params["planning_horizon"],
-                                  network_params['supplier_start_hr'],
-                                  network_params['pickup_end_hr'])
+                            simulation_params["planning_horizon"],
+                            network_params['vendor_start_hr'],
+                            network_params['pickup_end_hr'])
 
 # Iterate through different weight values
 for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
@@ -43,7 +43,7 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
     # Read geocoded data from CSV file
     germany_coordinates = [51.1657, 10.4515]
     df_geocoded = pd.read_csv(data_path, sep=';')
-    consignee_values = df_geocoded[['Consignee longitude', 'Consignee latitude']].apply(list, axis=1)
+    recipient_values = df_geocoded[['recipient longitude', 'recipient latitude']].apply(list, axis=1)
 
     # Iterate through simulation periods
     for period in periods:
@@ -51,23 +51,23 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
         net = Graph(network_params)
 
         # Read data and create Graph for the given period
-        complete_coordinates, suppliers_df = net.read_data([period[0], period[1]], df_geocoded)
+        complete_coordinates, vendors_df = net.read_data([period[0], period[1]], df_geocoded)
 
-        if len(suppliers_df) in range(1, 15):  # Check if orders are done in that period
+        if len(vendors_df) in range(1, 15):  # Check if orders are done in that period
             print('\n Time Frame Definition ---------------------------------------------------------------------------------------------------------------------------------------------------')
             print('Initial Simulation Date:', period[0])
             print('End Simulation Date:    ', period[1])
-            print('Length suppliers:', len(suppliers_df))
+            print('Length vendors:', len(vendors_df))
 
             print('\n Create Graph ----------------------------------------------------------------------------------------------------------------------------------------------------------')
             # Create and discretize the Graph
-            net.create_network(complete_coordinates, suppliers_df)
+            net.create_network(complete_coordinates, vendors_df)
             net.discretize()
-            time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(suppliers_df, period[0], period[1])
+            time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(vendors_df, period[0], period[1])
 
             # Create cargo and loading matrices
-            capacity_matrix = cargo_vector(suppliers_df)
-            loading_matrix = loading_vector(suppliers_df)
+            capacity_matrix = cargo_vector(vendors_df)
+            loading_matrix = loading_vector(vendors_df)
 
             print('\n Solving -----------------------------------------------------------------------------------------------------------------------------------------------------------------')
             # Create the DeliveryOptimizer model and solve it

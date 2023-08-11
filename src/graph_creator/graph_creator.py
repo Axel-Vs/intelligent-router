@@ -26,11 +26,11 @@ class Graph:
         self.discretization_constant = params['discretization_constant']
         self.starting_depot = params['starting_depot']
         self.closing_depot = params['closing_depot']
-        self.supplier_start_hr = params['supplier_start_hr']
+        self.vendor_start_hr = params['vendor_start_hr']
         self.pickup_end_hr = params['pickup_end_hr']
         self.loading = params['loading']        
-        self.earl_arv = params['earl_arv']   # Earliest arrival to supplier (days) 
-        self.late_arv = params['late_arv']   # Latest arrival to supplier (days)
+        self.earl_arv = params['earl_arv']   # Earliest arrival to vendor (days) 
+        self.late_arv = params['late_arv']   # Latest arrival to vendor (days)
         self.max_driving = params['max_driving']
         self.driving_starts = params['driving_starts']
         self.driving_stop = params['driving_stop']
@@ -55,7 +55,7 @@ class Graph:
             'discretization_constant':self.discretization_constant,
             'starting_depot':self.starting_depot,
             'closing_depot':self.closing_depot,
-            'supplier_start_hr':self.supplier_start_hr,
+            'vendor_start_hr':self.vendor_start_hr,
             'pickup_end_hr':self.pickup_end_hr,
             'loading':self.loading,
             'max_driving':self.max_driving,
@@ -104,9 +104,9 @@ class Graph:
         # time_expanded_network: i, t, j, t'
 
     def read_data(self,  period, initial_dataset):
-        """Read pre-processing data, filter the period given and extracts coordinates and supplier dataset.
+        """Read pre-processing data, filter the period given and extracts coordinates and vendor dataset.
         Input: Period and dataset path.
-        Output: List with coordinates and suppliers information dataframe
+        Output: List with coordinates and vendors information dataframe
         """
         # initial_dataset = pd.read_csv(path)
         #---!
@@ -114,10 +114,10 @@ class Graph:
         #---!
 
 
-        # consignee_extract
-        consignee_values = initial_dataset[['Consignee longitude', 'Consignee latitude']].apply(list, axis=1)
+        # recipient_extract
+        recipient_values = initial_dataset[['recipient longitude', 'recipient latitude']].apply(list, axis=1)
 
-        # supplier_extrac
+        # vendor_extrac
         if not isinstance(period, list):
             in_p = period.replace(hour=0, minute=0)
             en_p = period.replace(hour=23, minute=59)
@@ -129,29 +129,29 @@ class Graph:
         filter_geocoded = filter_dates(initial_dataset, period)       
  
         filter_geocoded.reset_index(drop=True, inplace=True)
-        df_coord = filter_geocoded[['Supplier longitude', 'Supplier latitude']]
-        supplier_coordinates = df_coord.apply(list, axis=1)       # just coordinates 
+        df_coord = filter_geocoded[['vendor longitude', 'vendor latitude']]
+        vendor_coordinates = df_coord.apply(list, axis=1)       # just coordinates 
 
-        suppliers_df = filter_geocoded[['Supplier Name', 'Supplier longitude', 'Supplier latitude', 'Calculated Loading Meters', 'Total Gross Weight',  'Requested Loading', 'Requested Delivery']]
-        suppliers_df.index = suppliers_df.index + 1
-        suppliers_df = suppliers_df
-        if len(suppliers_df) !=0:
-            print('Number of suppliers extracted:', len(suppliers_df))   # complete dataset
+        vendors_df = filter_geocoded[['vendor Name', 'vendor longitude', 'vendor latitude', 'Calculated Loading Meters', 'Total Gross Weight',  'Requested Loading', 'Requested Delivery']]
+        vendors_df.index = vendors_df.index + 1
+        vendors_df = vendors_df
+        if len(vendors_df) !=0:
+            print('Number of vendors extracted:', len(vendors_df))   # complete dataset
         
         # consolidation
-        complete_coordinates = consignee_values.head(1).append(supplier_coordinates)
+        complete_coordinates = recipient_values.head(1).append(vendor_coordinates)
         complete_coordinates = list(complete_coordinates)
         
-        return complete_coordinates, suppliers_df
+        return complete_coordinates, vendors_df
         
 
-    def create_network(self, complete_coordinates, suppliers_df):
+    def create_network(self, complete_coordinates, vendors_df):
         """Creates Fix connection network.
         Input: Nodes coordinates, source index, openrouteservice connection, setting to zero parameter.
         Output: Distance and Time Travel Matrix
         """
         self.distance_matrix, self.time_distance_matrix = info_matrix_definition(complete_coordinates, 0, 'horizontal', self.client)
-        self.Nodes = cr_nodes(suppliers_df)       
+        self.Nodes = cr_nodes(vendors_df)       
         self.length = len(self.distance_matrix)
         print('Distance & Time Distance Matrix created')
 
@@ -197,30 +197,30 @@ class Graph:
             return ext_days, Tau_hours, Tau
 
 
-    def Time_set_wider(discretization_constant, earl_arv, late_arv, suppliers_df, local, init_simulation_date, end_simulation_date): 
-        """Creates Time Index and Hour range vector of the given period. The interval [d1, d2] is the time space range that will be considered for arriving to the suppliers.
+    def Time_set_wider(discretization_constant, earl_arv, late_arv, vendors_df, local, init_simulation_date, end_simulation_date): 
+        """Creates Time Index and Hour range vector of the given period. The interval [d1, d2] is the time space range that will be considered for arriving to the vendors.
         Input: 
         discretization_constant: Discretization constant.
-        earl_arv: Earliest arrival time to the supplier.
-        late_arv: Latest arrival time to the supplier.
-        suppliers_df: Suppliers DataFrame.
+        earl_arv: Earliest arrival time to the vendor.
+        late_arv: Latest arrival time to the vendor.
+        vendors_df: vendors DataFrame.
         Output: 
-        d1: min_date for arriving during the period excluding the Consignee.
-        d2: max_date for arriving during the period excluding the Consignee.
-        ext_days: Complete range of arrivals including the Consignee [d1, d2 + 1].
+        d1: min_date for arriving during the period excluding the recipient.
+        d2: max_date for arriving during the period excluding the recipient.
+        ext_days: Complete range of arrivals including the recipient [d1, d2 + 1].
         Tau_hours: Vector of arrival hours.
         Tau: Index of the Tau_hours vector.
         """
-        min_date = min(suppliers_df['Requested Loading']) 
-        max_date = max(suppliers_df['Requested Loading']) 
-        maximum_consignee = suppliers_df['Requested Delivery']
+        min_date = min(vendors_df['Requested Loading']) 
+        max_date = max(vendors_df['Requested Loading']) 
+        maximum_recipient = vendors_df['Requested Delivery']
 
         min_dt = datetime.datetime.strptime(min_date, '%d.%m.%Y %H:%M')
         max_dt = datetime.datetime.strptime(max_date, '%d.%m.%Y %H:%M')
         # should be 
         d0 = init_simulation_date
         d1 = min_dt - datetime.timedelta(days=earl_arv)
-        d2 = max_dt + datetime.timedelta(days=late_arv + 1) # Max arrival time to the depot (48 hours after maximum arrival time on supplier)
+        d2 = max_dt + datetime.timedelta(days=late_arv + 1) # Max arrival time to the depot (48 hours after maximum arrival time on vendor)
         dn = end_simulation_date
 
         # Local Time Array
@@ -232,22 +232,22 @@ class Graph:
             minimum_dt = d0
             ext_days, Tau_hours, Tau = Graph.time_definition(discretization_constant, dn, d0)
 
-        return maximum_consignee, minimum_dt, ext_days, Tau_hours, Tau
+        return maximum_recipient, minimum_dt, ext_days, Tau_hours, Tau
 
-    def create_time_network(self, suppliers_df, init_simulation_date, end_simulation_date):
+    def create_time_network(self, vendors_df, init_simulation_date, end_simulation_date):
         """Creates Time-Expanded Graph
         Input: 
-        suppliers_df: Suppliers DataFrame.
+        vendors_df: vendors DataFrame.
         Output: 
         T_ex: Time-Expanded Graph.
         time_network_index: Index of the Tau_hours vector (expanded).
         """
         # 1) Establish the index boundaries of the Time-Network.
-        maximum_consignee, self.min_date, self.tour_days, self.Tau_hours, Tau_index = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, True, init_simulation_date, end_simulation_date)
+        maximum_recipient, self.min_date, self.tour_days, self.Tau_hours, Tau_index = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, vendors_df, True, init_simulation_date, end_simulation_date)
         self.min_day = self.min_date.day
         
         non_open_depot_index=np.where((np.array(self.Tau_hours)<self.starting_depot) | (np.array(self.Tau_hours)>self.closing_depot))
-        non_open_supp_index=np.where((np.array(self.Tau_hours)<self.supplier_start_hr) | (np.array(self.Tau_hours)>self.pickup_end_hr))
+        non_open_supp_index=np.where((np.array(self.Tau_hours)<self.vendor_start_hr) | (np.array(self.Tau_hours)>self.pickup_end_hr))
 
         non_open_depot_index = list(non_open_depot_index[0])
         non_open_supp_index = list(non_open_supp_index[0])
@@ -257,12 +257,12 @@ class Graph:
         # night_size = len(consecutive(non_driving_index)[0])
         night_size = max(list(map(len, consecutive(non_driving_index))))
 
-        days_req = pd.to_datetime(suppliers_df['Requested Loading'], format= '%d.%m.%Y %H:%M').dt.day
+        days_req = pd.to_datetime(vendors_df['Requested Loading'], format= '%d.%m.%Y %H:%M').dt.day
         if self.late_arv <= 6:
             e = {}
             l = {}
             for i in range(1,len(days_req)+1):
-                current_time = suppliers_df['Requested Loading'][i]
+                current_time = vendors_df['Requested Loading'][i]
 
                 current_time = datetime.datetime.strptime(current_time, '%d.%m.%Y %H:%M')
                 upper_time_window = current_time + datetime.timedelta(hours=self.earl_arv)
@@ -271,23 +271,23 @@ class Graph:
                 if upper_time_window.hour >= self.pickup_end_hr:
                     diff_hours = upper_time_window.hour - self.pickup_end_hr
                     if monthrange(current_time.year, current_time.month)[1] >= current_time.day + 1:
-                        upper_time_window = datetime.datetime(current_time.year, current_time.month, current_time.day + 1, self.supplier_start_hr + diff_hours, 0, 0)
+                        upper_time_window = datetime.datetime(current_time.year, current_time.month, current_time.day + 1, self.vendor_start_hr + diff_hours, 0, 0)
                     else:
-                        upper_time_window = datetime.datetime(current_time.year, current_time.month + 1, current_time.day + 1 - monthrange(current_time.year, current_time.month)[1], self.supplier_start_hr + diff_hours, 0, 0)
+                        upper_time_window = datetime.datetime(current_time.year, current_time.month + 1, current_time.day + 1 - monthrange(current_time.year, current_time.month)[1], self.vendor_start_hr + diff_hours, 0, 0)
 
-                if lower_time_window.hour < self.supplier_start_hr:
-                    diff_hours = self.supplier_start_hr - lower_time_window.hour
+                if lower_time_window.hour < self.vendor_start_hr:
+                    diff_hours = self.vendor_start_hr - lower_time_window.hour
                     lower_time_window = datetime.datetime(current_time.year, current_time.month, current_time.day -1, self.pickup_end_hr - diff_hours, 0, 0)
 
                 e[i] = [lower_time_window.day, int(lower_time_window.strftime("%H") )]
                 l[i] = [upper_time_window.day, int(upper_time_window.strftime("%H") )]
         elif self.late_arv == 24:
-            # 2) Defines the time Windows for each Supplier.
+            # 2) Defines the time Windows for each vendor.
             e = {}
             l = {}
-            print(suppliers_df)
+            print(vendors_df)
             for i in days_req.index:
-                current_time = suppliers_df['Requested Loading'][i]
+                current_time = vendors_df['Requested Loading'][i]
                 current_time = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
             
                 lower_date = current_time - datetime.timedelta(hours=self.earl_arv)
@@ -307,8 +307,8 @@ class Graph:
         e_inx[0] = 0
         l_inx[0] = max(Tau_index)
         for i in e.keys():
-            e_inx[i] = date_index(self.discretization_constant, e[i][0], e[i][1], self.min_date, self.tour_days, self.Tau_hours, 'early_values', maximum_consignee[i])
-            l_inx[i] = date_index(self.discretization_constant, l[i][0], l[i][1], self.min_date, self.tour_days, self.Tau_hours, 'latest_values', maximum_consignee[i])
+            e_inx[i] = date_index(self.discretization_constant, e[i][0], e[i][1], self.min_date, self.tour_days, self.Tau_hours, 'early_values', maximum_recipient[i])
+            l_inx[i] = date_index(self.discretization_constant, l[i][0], l[i][1], self.min_date, self.tour_days, self.Tau_hours, 'latest_values', maximum_recipient[i])
             
         time_windows={}
         for i in self.Nodes:
@@ -372,7 +372,7 @@ class Graph:
                     print('Teletransport!')
                     print(i)
 
-        # 4) Add time points above the +1 day given in [d1, d2 + 1] if one day is not enough (given the travel time from supplier i to the Consignee).
+        # 4) Add time points above the +1 day given in [d1, d2 + 1] if one day is not enough (given the travel time from vendor i to the recipient).
         time_index_values = []
         for i in range(len(T_ex)):
             time_index_values.append(T_ex[i][1][1] )
@@ -390,18 +390,18 @@ class Graph:
 
         return T_ex, Tau_index, time_network_index
 
-    def shift_time(self, index_to_shift, suppliers_df, init_simulation_date, end_simulation_date):
+    def shift_time(self, index_to_shift, vendors_df, init_simulation_date, end_simulation_date):
         # shift index to the overall time index matrix
-        maximum_consignee, min_date_overall, tour_days, Tau_hours_overall, Tau_index_overall = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, suppliers_df, False, init_simulation_date, end_simulation_date)
+        maximum_recipient, min_date_overall, tour_days, Tau_hours_overall, Tau_index_overall = Graph.Time_set_wider(self.discretization_constant, self.earl_arv, self.late_arv, vendors_df, False, init_simulation_date, end_simulation_date)
     
         current_time = self.min_date
         arrv_day = current_time.day
         arrv_time = int(current_time.strftime("%H") )
         return index_to_shift + date_index(self.discretization_constant, arrv_day, arrv_time, min_date_overall, tour_days, Tau_hours_overall, 'early_values')
 
-    def update_time_expanded_network(self, time_expanded_network_local, suppliers_df, init_simulation_date, end_simulation_date):
+    def update_time_expanded_network(self, time_expanded_network_local, vendors_df, init_simulation_date, end_simulation_date):
         time_expanded_network_general = copy.deepcopy(time_expanded_network_local)
-        shift_value = Graph.shift_time(self, 0, suppliers_df, init_simulation_date, end_simulation_date) 
+        shift_value = Graph.shift_time(self, 0, vendors_df, init_simulation_date, end_simulation_date) 
         for i in range(len(time_expanded_network_local)):
             time_expanded_network_general[i][0][1] = time_expanded_network_local[i][0][1] + shift_value
             time_expanded_network_general[i][1][1] = time_expanded_network_local[i][1][1] + shift_value
