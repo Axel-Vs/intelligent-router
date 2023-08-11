@@ -2,28 +2,15 @@ import sys
 from pathlib import Path
 
 # Get the parent directory of the current script (project root)
-project_root = Path(__file__).resolve().parent.parent
-
+project_root = Path(__file__).resolve().parent
 # Add the paths of the relevant directories to sys.path
-sys.path.append(str(project_root / 'src'))
+sys.path.append(str(project_root))
 
 # Import the modules from their respective directories
 from graph_creator.graph_creator import Network
 from model.delivery_model import CVRPTW
-
-
-# import sys
-# from pathlib import Path
-
-# project_root = Path(__file__).resolve().parent.parent
-# print('project_root', project_root)
-# sys.path.append(str(project_root))
-
-
-# # Import required modules from their respective directories
-# from graph_creator.graph_creator import Network
-# from model import delivery_model
 from utils.utils import *
+
 import pandas as pd
 import os
 
@@ -41,10 +28,10 @@ print('Starting Simulation -----------------------------------------------------
 print('\n')
 
 # Import parameters for the simulation from configuration files
-network_params, model_params, simulation_params = utils.import_parameters(parameters_path)
+network_params, model_params, simulation_params = import_parameters(parameters_path)
 
 # Generate time periods for the simulation
-periods = utils.periods_generator(simulation_params["Simulation_periods"],
+periods = periods_generator(simulation_params["Simulation_periods"],
                                   simulation_params["planning_horizon"],
                                   network_params['supplier_start_hr'],
                                   network_params['pickup_end_hr'])
@@ -79,8 +66,8 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
             time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(suppliers_df, period[0], period[1])
 
             # Create cargo and loading matrices
-            capacity_matrix = utils.cargo_vector(suppliers_df)
-            loading_matrix = utils.loading_vector(suppliers_df)
+            capacity_matrix = cargo_vector(suppliers_df)
+            loading_matrix = loading_vector(suppliers_df)
 
             print('\n Solving -----------------------------------------------------------------------------------------------------------------------------------------------------------------')
             # Create the CVRPTW model and solve it
