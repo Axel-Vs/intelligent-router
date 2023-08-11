@@ -1,15 +1,14 @@
-import sys
 from pathlib import Path
-
+import sys
 # Get the parent directory of the current script (project root)
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parent.parent
 # Add the paths of the relevant directories to sys.path
 sys.path.append(str(project_root))
 
 # Import the modules from their respective directories
-from graph_creator.graph_creator import Graph
-from model.delivery_model import DeliveryOptimizer
-from utils.utils import *
+from src.graph_creator.graph_creator import Graph
+from src.model.delivery_model import DeliveryOptimizer
+from src.utils.utils import *
 
 import pandas as pd
 import os
