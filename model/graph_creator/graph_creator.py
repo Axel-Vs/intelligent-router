@@ -38,7 +38,6 @@ class Graph:
         self.max_ldms = params['max_ldms']
         self.plot_centered_coordinates = params['plot_centered_coordinates']      
         self.client = ors.Client(key= '5b3ce3597851110001cf6248448674063e0d4ec38216e52a54d951b5') # Specify your personal API key
-        # Paul: We should have these parameters already defined so they are known
         self.distance_matrix = None
         self.time_distance_matrix = None
         self.disc_time_distance_matrix = None
@@ -72,7 +71,6 @@ class Graph:
         self.time_distance_matrix.write_csv(path+"time_distance_matrix")
         self.capacity_matrix.write_csv(path+"capacity_matrix")
     
-    #Paul:TODO: Implement
     def get_subset_of_network(self, first_day: int, last_day: int):
         """
         Get a subset of a Graph for the rolling horizon scheduling

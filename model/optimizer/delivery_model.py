@@ -309,7 +309,7 @@ class DeliveryOptimizer:
         # Store solution ----------------------------------------------------------------------------------------
         solution_dict = {}
         # Model
-        solution_dict['period'] = self.evaluation_period #Paul:TODO: What exactly is this and where do we need to define it?
+        solution_dict['period'] = self.evaluation_period 
         solution_dict['discretization_constant'] = self.discretization_constant
         solution_dict['distance_matrix'] = self.distance_matrix
         solution_dict['disc_time_distance_matrix'] = self.disc_time_distance_matrix        

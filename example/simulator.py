@@ -6,9 +6,9 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
 # Import the modules from their respective directories
-from src.graph_creator.graph_creator import Graph
-from src.model.delivery_model import DeliveryOptimizer
-from src.utils.utils import *
+from model.graph_creator.graph_creator import Graph
+from model.optimizer.delivery_model import DeliveryOptimizer
+from model.utils.utils import *
 
 import pandas as pd
 import os
@@ -42,7 +42,7 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
     # Read geocoded data from CSV file
     germany_coordinates = [51.1657, 10.4515]
     df_geocoded = pd.read_csv(data_path, sep=';')
-    recipient_values = df_geocoded[['recipient longitude', 'recipient latitude']].apply(list, axis=1)
+    recipient_values = df_geocoded[['Recipient longitude', 'Recipient latitude']].apply(list, axis=1)
 
     # Iterate through simulation periods
     for period in periods:
