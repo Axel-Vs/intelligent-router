@@ -1,7 +1,30 @@
-# Import required modules from their respective directories
+import sys
+from pathlib import Path
+
+# Get the parent directory of the current script (project root)
+project_root = Path(__file__).resolve().parent.parent
+
+# Add the paths of the relevant directories to sys.path
+sys.path.append(str(project_root / 'src'))
+
+# Import the modules from their respective directories
 from graph_creator.graph_creator import Network
 from model.delivery_model import CVRPTW
-from utils import utils
+
+
+
+# import sys
+# from pathlib import Path
+
+# project_root = Path(__file__).resolve().parent.parent
+# print('project_root', project_root)
+# sys.path.append(str(project_root))
+
+
+# # Import required modules from their respective directories
+# from graph_creator.graph_creator import Network
+# from model import delivery_model
+from utils.utils import *
 import pandas as pd
 import os
 

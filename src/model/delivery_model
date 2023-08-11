@@ -1,8 +1,14 @@
-from utils import *
-from ortools.linear_solver import pywraplp
-from pyqubo import Binary, Array, Constraint, Placeholder
-
 import os
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+from utils.utils import *
+from ortools.linear_solver import pywraplp
+from pyqubo import Array, Constraint, Placeholder
+
 
 class CVRPTW: 
     def __init__(self, evaluation_period, discretization_constant, time_expanded_network, time_expanded_network_index, Tau_hours, distance_matrix, disc_time_distance_matrix, 

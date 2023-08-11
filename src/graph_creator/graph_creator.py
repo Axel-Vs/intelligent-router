@@ -1,6 +1,10 @@
-from utils import *
-from calendar import monthrange
+import sys
+from pathlib import Path
 
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+from calendar import monthrange
 import datetime
 import copy
 import os
@@ -8,6 +12,8 @@ import pandas as pd
 import math
 import warnings
 import openrouteservice as ors
+
+from utils.utils import *
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 

@@ -1,0 +1,9 @@
+{
+    "name": "Python: Current File",
+    "type": "python",
+    "request": "launch",
+    "program": "${file}",
+    "console": "integratedTerminal",
+    "python": "${env:CONDA_PREFIX}\\python.exe", // Use the Python interpreter in the active environment
+    "justMyCode": true
+}
