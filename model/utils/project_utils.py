@@ -13,6 +13,7 @@ import coloredlogs
 import math
 import json
 import os
+import pycountry
 
 from IPython.display import display
 
@@ -62,7 +63,7 @@ def column_input(df, column_values):
 
     return df[column_values]
 
-def data_pre_process(path, sep, complete):
+def data_pre_process(path, dataset_name, sep, complete):
     """
     Performs data pre-processing on the input CSV file.
     Args:
@@ -72,22 +73,22 @@ def data_pre_process(path, sep, complete):
     Returns:
         pd.DataFrame: The pre-processed DataFrame.
     """
-    df = pd.read_csv(path, sep=sep, engine='python')
+    df = pd.read_csv( os.path.join(path,dataset_name),  sep=sep, engine='python')
     
     # Standardize values in all columns
     for column_names in df.columns:
         df[column_names] = column_input(df, column_names)
     
-    # Change country id for country name on Vendors and Recipiente ----
+    # Change country id for country name on Vendors and Recipient ----
     # Download country catalogue
     countries = {}
     for country in pycountry.countries:
         countries[country.alpha_2] = country.name
     # Obtain all the countries id on the dataset
     if complete == True:
-        complete_contries_codes = pd.concat([df['Recipiente Country'], df['Vendor Country']], axis=0).unique()
+        complete_contries_codes = pd.concat([df['Recipient Country'], df['Vendor Country']], axis=0).unique()
     else:
-        complete_contries_codes = df['Recipiente Country'].unique()
+        complete_contries_codes = df['Recipient Country'].unique()
     complete_countries_names = [countries.get(country_id, 'Unknown code') for country_id in complete_contries_codes]
     # Create data with all the countries id
     complete_countries_names = pd.DataFrame(complete_countries_names, columns=['countries_names'])
@@ -95,28 +96,38 @@ def data_pre_process(path, sep, complete):
     country_catalogue = pd.concat([complete_contries_codes, complete_countries_names], axis=1)
     # Add the name instead of ids
     if complete == True:
-        df = df.merge(country_catalogue, how='left', left_on='Recipiente Country', right_on='countries_codes')
-        df = df.rename(columns={'countries_names': 'Recipiente Country Name'})
+        df = df.merge(country_catalogue, how='left', left_on='Recipient Country', right_on='countries_codes')
+        df = df.rename(columns={'countries_names': 'Recipient Country Name'})
         df = df.merge(country_catalogue, how='left', left_on='Vendor Country', right_on='countries_codes')
         df = df.rename(columns={'countries_names': 'Vendor Country Name'})
-        df.drop(['Recipiente Country', 'Vendor Country', 'countries_codes_x', 'countries_codes_y'], axis=1, inplace=True)
+        df.drop(['Recipient Country', 'Vendor Country', 'countries_codes_x', 'countries_codes_y'], axis=1, inplace=True)
         # Create Addresses
-        df['Recipiente Address'] = df['Recipiente Street'] + ', ' + df['Recipiente Postcode'].map(str) + ', ' + \
-                                  df['Recipiente City'] + ', ' + df['Recipiente Country Name']
-        df['Vendor Address'] = df['Vendor Street'] + ', ' + df['Vendor Postcode'].map(str) + ', ' + \
-                                 df['Vendor City'] + ', ' + df['Vendor Country Name']
+        # Assuming 'df' is your DataFrame
+        df['Recipient City'] = df['Recipient City'].astype(str)
+        df['Recipient Country Name'] = df['Recipient Country Name'].astype(str)
+
+        # Perform the concatenation after ensuring both columns are strings
+        df['Recipient Address'] = df.apply(
+                                            lambda row: f"{row['Recipient Street']}, {str(row['Recipient Postcode'])}, {row['Recipient City']}, {row['Recipient Country Name']}", 
+                                            axis=1
+                                           )
+        df['Vendor Address'] = df.apply(
+                                        lambda row: f"{row['Vendor Street']}, {str(row['Vendor Postcode'])}, {row['Vendor City']}, {row['Vendor Country Name']}",
+                                        axis=1
+                                        )
+
     else:    
-        df = df.merge(country_catalogue, how='left', left_on='Recipiente Country', right_on='countries_codes')
-        df = df.rename(columns={'countries_names': 'Recipiente Country Name'})
-        df.drop(['Recipiente Country', 'countries_codes'], axis=1, inplace=True)
+        df = df.merge(country_catalogue, how='left', left_on='Recipient Country', right_on='countries_codes')
+        df = df.rename(columns={'countries_names': 'Recipient Country Name'})
+        df.drop(['Recipient Country', 'countries_codes'], axis=1, inplace=True)
         # Create Addresses
-        df['Recipiente Address'] = df['Recipiente Street'] + ', ' + df['Recipiente Postcode'].map(str) + ', ' + \
-                                  df['Recipiente City'] + ', ' + df['Recipiente Country Name']        
+        df['Recipient Address'] = df['Recipient Street'] + ', ' + df['Recipient Postcode'].map(str) + ', ' + \
+                                  df['Recipient City'] + ', ' + df['Recipient Country Name']        
     return df
 
 # Filtering functions ----------------------------------------------------------------------------------------
 def data_filter(df, fces_stype, incoterms, supp_country, req_month, req_year, 
-                recipiente_name, recipiente_address_pattern, drop_dup):
+                Recipient_name, Recipient_address_pattern, drop_dup):
     """
     Filters the input DataFrame based on provided parameters.
     Args:
@@ -126,8 +137,8 @@ def data_filter(df, fces_stype, incoterms, supp_country, req_month, req_year,
         supp_country (str): Vendor country name to filter by.
         req_month (list): List of requested loading months.
         req_year (list): List of requested loading years.
-        recipiente_name (list): List of recipiente names to filter by.
-        recipiente_address_pattern (str): Pattern to match in recipiente address.
+        Recipient_name (list): List of Recipient names to filter by.
+        Recipient_address_pattern (str): Pattern to match in Recipient address.
         drop_dup (bool): True to drop duplicate entries.
     Returns:
         pd.DataFrame: The filtered DataFrame.
@@ -143,8 +154,8 @@ def data_filter(df, fces_stype, incoterms, supp_country, req_month, req_year,
             (df['Incoterms®'] == incoterms) &
             (df['Requested Loading Month'].isin(req_month)) &
             (df['Requested Loading Year'].isin(req_year)) &
-            (df['Recipiente Name'].isin(recipiente_name)) &
-            (df['Recipiente Street'].str.contains(recipiente_address_pattern, case=False, na=False))
+            (df['Recipient Name'].isin(Recipient_name)) &
+            (df['Recipient Street'].str.contains(Recipient_address_pattern, case=False, na=False))
         ]
     else:
         new_df = df.loc[
@@ -153,8 +164,8 @@ def data_filter(df, fces_stype, incoterms, supp_country, req_month, req_year,
             (df['Vendor Country Name'] == supp_country) &
             (df['Requested Loading Month'].isin(req_month)) &
             (df['Requested Loading Year'].isin(req_year)) &
-            (df['Recipiente Name'].isin(recipiente_name)) &
-            (df['Recipiente Street'].str.contains(recipiente_address_pattern, case=False, na=False))
+            (df['Recipient Name'].isin(Recipient_name)) &
+            (df['Recipient Street'].str.contains(Recipient_address_pattern, case=False, na=False))
         ]
 
     if drop_dup == True:
