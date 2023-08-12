@@ -8,7 +8,7 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
 # Import required modules
-from utils.utils import *
+from utils.project_utils import *
 from ortools.linear_solver import pywraplp
 from pyqubo import Array, Constraint, Placeholder
 

@@ -13,7 +13,7 @@ import math
 import warnings
 import openrouteservice as ors
 
-from utils.utils import *
+from utils.project_utils import *
 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)

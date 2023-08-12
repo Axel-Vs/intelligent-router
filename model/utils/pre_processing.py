@@ -25,10 +25,10 @@ import pycountry
 import math
 
 
-C:\Users\z004d5wh\Documents\Master_Thesis\thesis_project\GBS\2_data
-general_path='C:/Users/z004d5wh/Documents/Master_Thesis/thesis_project/Data'
-raw_data_path=os.path.join(general_path, 'raw_data.csv')
-complete_data=data_pre_process(raw_data_path, ';', True)
+# C:\Users\z004d5wh\Documents\Master_Thesis\thesis_project\GBS\2_data
+# general_path='C:/Users/z004d5wh/Documents/Master_Thesis/thesis_project/Data'
+# raw_data_path=os.path.join(general_path, 'raw_data.csv')
+# complete_data=data_pre_process(raw_data_path, ';', True)
 
 
 

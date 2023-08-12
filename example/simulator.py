@@ -8,7 +8,7 @@ sys.path.append(str(project_root))
 # Import the modules from their respective directories
 from model.graph_creator.graph_creator import Graph
 from model.optimizer.delivery_model import DeliveryOptimizer
-from model.utils.utils import *
+from model.utils.project_utils import *
 
 import pandas as pd
 import os
