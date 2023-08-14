@@ -1,17 +1,16 @@
 from pathlib import Path
 import sys
-# Get the parent directory of the current script (project root)
-project_root = Path(__file__).resolve().parent.parent
-# Add the paths of the relevant directories to sys.path
-sys.path.append(str(project_root))
-
-# Import the modules from their respective directories
+import pandas as pd
+import os
 from model.graph_creator.graph_creator import Graph
 from model.optimizer.delivery_model import DeliveryOptimizer
 from model.utils.project_utils import *
 
-import pandas as pd
-import os
+# Get the parent directory of the current script (project root)
+project_root = Path(__file__).resolve().parent.parent
+
+# Add the paths of the relevant directories to sys.path
+sys.path.append(str(project_root))
 
 # Get the current working directory
 main_root = os.getcwd()
@@ -22,9 +21,12 @@ data_path = os.path.join(main_root, 'data/amazon_test_dataset.csv')  # Warning: 
 results_path = os.path.join(main_root, 'results/optimization')
 
 # Print initial message
-print('\n')
-print('Starting Simulation -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------')
-print('\n')
+print('\nStarting Simulation ---------------------------------------------------------------------------------------------------------------------------------------------------------------------\n')
+
+# Import the modules from their respective directories
+from model.graph_creator.graph_creator import Graph
+from model.optimizer.delivery_model import DeliveryOptimizer
+from model.utils.project_utils import *
 
 # Import parameters for the simulation from configuration files
 network_params, model_params, simulation_params = import_parameters(parameters_path)
@@ -46,6 +48,10 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
 
     # Iterate through simulation periods
     for period in periods:
+        print('\n Time Frame Definition ---------------------------------------------------------------------------------------------------------------------------------------------------')
+        print('Initial Simulation Date:', period[0])
+        print('End Simulation Date:    ', period[1])
+
         # Create a Graph object
         net = Graph(network_params)
 
@@ -53,9 +59,6 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
         complete_coordinates, vendors_df = net.read_data([period[0], period[1]], df_geocoded)
 
         if len(vendors_df) in range(1, 15):  # Check if orders are done in that period
-            print('\n Time Frame Definition ---------------------------------------------------------------------------------------------------------------------------------------------------')
-            print('Initial Simulation Date:', period[0])
-            print('End Simulation Date:    ', period[1])
             print('Length vendors:', len(vendors_df))
 
             print('\n Create Graph ----------------------------------------------------------------------------------------------------------------------------------------------------------')
@@ -83,6 +86,4 @@ for w in [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]:
             deliveryoptimizer.print_status(status, connections_solution, vehicles_solution)
             deliveryoptimizer.save_solution(results_path)
 
-            print('\n Finish Iteration -----------------------------------------------------------------------------------------------------------------------------------------------------------------')
-            print('')
-
+            print('\n Finish Iteration -----------------------------------------------------------------------------------------------------------------------------------------------------------------\n')
