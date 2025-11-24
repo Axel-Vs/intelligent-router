@@ -2,6 +2,9 @@ from pathlib import Path
 import sys
 import pandas as pd
 import os
+
+print(os.getcwd())
+
 from model.graph_creator.graph_creator import Graph
 from model.optimizer.delivery_model import DeliveryOptimizer
 from model.utils.project_utils import *
