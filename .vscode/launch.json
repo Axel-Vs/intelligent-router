@@ -5,9 +5,10 @@
         "name": "Python: simulator.py",
         "type": "python",
         "request": "launch",
-        "program": "${file}",
+        "program": "${workspaceFolder}/example/simulator.py",
         "console": "integratedTerminal",
-        "justMyCode": false
+        "justMyCode": true,
+        "stopOnEntry": false
       }
     ]
   }
