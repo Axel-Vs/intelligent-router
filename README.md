@@ -66,10 +66,11 @@ python -m venv parcel_env
 source parcel_env/bin/activate  # On Windows: parcel_env\Scripts\activate
 ```
 
-3. **Install dependencies**
+3. **Install the package and dependencies**
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
+> This installs the package in editable mode using `pyproject.toml`
 
 ### Quick Start
 
