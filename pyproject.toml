@@ -1,0 +1,155 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parcel-delivery-solver"
+version = "1.0.0"
+description = "A sophisticated optimization system for vehicle routing and parcel delivery using OR-Tools and OSRM"
+readme = "README.md"
+authors = [
+    { name = "Axel Vargas", email = "axel@example.com" }
+]
+maintainers = [
+    { name = "Axel Vargas", email = "axel@example.com" }
+]
+license = { text = "MIT" }
+keywords = [
+    "optimization",
+    "vehicle-routing",
+    "logistics",
+    "or-tools",
+    "osrm",
+    "delivery",
+    "routing",
+    "mixed-integer-programming",
+    "time-expanded-network"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "ortools>=9.7.0",
+    "folium>=0.14.0",
+    "requests>=2.31.0",
+    "geopy>=2.4.0",
+    "coloredlogs>=15.0.0",
+    "ipython>=8.14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "flake8>=6.1.0",
+    "mypy>=1.5.0",
+    "isort>=5.12.0",
+]
+docs = [
+    "sphinx>=7.2.0",
+    "sphinx-rtd-theme>=1.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Axel-Vs/parcel-delivery-solver"
+Documentation = "https://github.com/Axel-Vs/parcel-delivery-solver#readme"
+Repository = "https://github.com/Axel-Vs/parcel-delivery-solver"
+"Bug Tracker" = "https://github.com/Axel-Vs/parcel-delivery-solver/issues"
+Changelog = "https://github.com/Axel-Vs/parcel-delivery-solver/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["model", "model.graph_creator", "model.optimizer", "model.utils"]
+
+[tool.setuptools.package-data]
+model = ["config/*.txt"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | parcel_env
+  | _build
+  | buck-out
+  | build
+  | dist
+  | results
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = ["parcel_env/*", "build/*", "dist/*"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "parcel_env",
+    "build",
+    "dist",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--cov=model",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+source = ["model"]
+omit = [
+    "*/tests/*",
+    "*/parcel_env/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
