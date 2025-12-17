@@ -12,4 +12,7 @@
  "max_weight": 30, 
  "max_ldms": 70, 
  "plot_centered_coordinates": [51.1657, 10.4515],
- "google_maps_api_key": null}
+ "google_maps_api_key": null,
+ "max_feasible_distance": 5000,
+ "time_window_sampling_threshold": 30,
+ "time_window_sample_size": 25}

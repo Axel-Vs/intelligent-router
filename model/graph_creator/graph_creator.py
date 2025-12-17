@@ -62,7 +62,12 @@ class Graph:
         self.driving_stop = params['driving_stop']
         self.max_weight = params['max_weight']
         self.max_ldms = params['max_ldms']
-        self.plot_centered_coordinates = params['plot_centered_coordinates']      
+        self.plot_centered_coordinates = params['plot_centered_coordinates']
+        
+        # Arc pruning parameters for optimization
+        self.max_feasible_distance = params.get('max_feasible_distance', 3000)  # km
+        self.time_window_sampling_threshold = params.get('time_window_sampling_threshold', 20)  # periods
+        self.time_window_sample_size = params.get('time_window_sample_size', 20)  # max samples
         
         # Initialize routing client (Google Maps preferred, ORS as fallback)
         self.google_api_key = params.get('google_maps_api_key', None)
@@ -353,55 +358,90 @@ class Graph:
         for i in self.Nodes:
             time_windows[i] = list(np.arange( e_inx[i], l_inx[i]+1, 1))
         
-        # 3) Creates the Expanded-Time Graph.
-        log.info('Creating Time-Expanded Graph...')
+        # 3) Creates the Expanded-Time Graph with pruning optimizations.
+        log.info('Creating Time-Expanded Graph with arc pruning...')
         T_ex = []
         maximum_values=[]
+        
+        # OPTIMIZATION 1: Pre-compute sets for faster lookup
+        non_open_supp_set = set(non_open_supp_index)
+        non_driving_set = set(non_driving_index)
+        non_open_depot_set = set(non_open_depot_index)
+        max_tau = max(Tau_index)
+        
+        # OPTIMIZATION 2: Use configurable distance threshold
+        arcs_pruned = 0
+        total_potential_arcs = 0
+        
         for i in range(self.length):
             for j in range(self.length):        
-                if i !=j:
+                if i != j:
+                    total_potential_arcs += 1
+                    # OPTIMIZATION 3: Skip arcs with excessive travel distance
+                    if self.distance_matrix[i][j] > self.max_feasible_distance:
+                        arcs_pruned += 1
+                        continue
+                    
                     if i == 0:
+                        # Depot to vendor arcs
                         for u in time_windows[j]:
-                            if (u not in non_open_supp_index) & (u <= max(Tau_index)):                        
+                            if (u not in non_open_supp_set) & (u <= max_tau):                        
                                 T_ex.append([ [i, u ], [j, u ] ])
-                                #T_ex.append([ [j, u + s_d ], [0, u + disc_time_distance_matrix[i][j]  ] ])
                                 
                     elif j == 0:
-                            for m in time_windows[i]:                                     
-                                t_e = m + self.disc_loading + self.disc_time_distance_matrix[i][j]                                                        
-                                # if min(abs(t_e - non_driving_index)) < 1:
-                                if (t_e in non_driving_index): 
-                                    t_e = t_e + night_size            
+                        # Vendor to depot arcs
+                        for m in time_windows[i]:                                     
+                            t_e = m + self.disc_loading + self.disc_time_distance_matrix[i][j]                                                        
+                            
+                            if t_e in non_driving_set: 
+                                t_e = t_e + night_size            
 
-                                # if (min(abs(t_e - non_open_depot_index)) >= 1) &  (t_e <= max(Tau_index)):                                                      
-                                if (t_e not in non_open_depot_index) & (t_e <= max(Tau_index)):                                    
-                                    # if min(abs(m - non_open_supp_index)) >= 1:
-                                    if m not in non_open_supp_index:
-                                        T_ex.append([ [i, m ], [j, t_e] ] )              
-                                elif t_e >= max(Tau_index):
-                                    # if min(abs(m - non_open_supp_index)) >= 1:
-                                    if m not in non_open_supp_index:
-                                        T_ex.append( [ [i, m], [j, max(Tau_index)] ] ) # arrive to the depot at the next day
-                                        maximum_values.append(t_e)                        
+                            if (t_e not in non_open_depot_set) & (t_e <= max_tau):                                    
+                                if m not in non_open_supp_set:
+                                    T_ex.append([ [i, m ], [j, t_e] ] )              
+                            elif t_e >= max_tau:
+                                if m not in non_open_supp_set:
+                                    T_ex.append( [ [i, m], [j, max_tau] ] )
+                                    maximum_values.append(t_e)                        
                     else:
-                        for m in time_windows[i]:
+                        # Vendor to vendor arcs - most pruning happens here
+                        # OPTIMIZATION 4: Check driving time constraint first (cheapest check)
+                        if self.disc_time_distance_matrix[i][j] > self.disc_max_driving:
+                            arcs_pruned += 1
+                            continue
+                        
+                        # OPTIMIZATION 5: Limit time window iterations - sample every N periods for large windows
+                        tw_i = time_windows[i]
+                        if len(tw_i) > self.time_window_sampling_threshold:
+                            step = max(1, len(tw_i) // self.time_window_sample_size)
+                            tw_i = tw_i[::step]
+                        
+                        for m in tw_i:
+                            if m in non_open_supp_set:
+                                continue
+                                
                             if self.disc_time_distance_matrix[i][j] == 0:                                
                                 t_e = m + (self.disc_loading - math.floor( self.disc_loading/2 )) + self.disc_time_distance_matrix[i][j]        
                             else:
-                                t_e = m + self.disc_loading + self.disc_time_distance_matrix[i][j]   #
+                                t_e = m + self.disc_loading + self.disc_time_distance_matrix[i][j]
                                 
-                            # if min(abs(t_e - non_driving_index)) < 1:
-                            if (t_e in non_driving_index):                               
+                            if t_e in non_driving_set:                               
                                 t_e = t_e + night_size
+                            
+                            # OPTIMIZATION 6: Early exit if time constraints violated
+                            if t_e > max_tau:
+                                continue
                                 
-                            if self.disc_time_distance_matrix[i][j] <= self.disc_max_driving:  
-                                # if (min(abs(t_e - non_open_supp_index)) >= 1) & (t_e <= max(Tau_index)):                                                 
-                                if (t_e not in non_open_supp_index) & (t_e <= max(Tau_index)):                                                 
-                                    if t_e <= max(time_windows[j]):
-                                        if self.disc_time_distance_matrix[i][j] <= self.disc_max_driving:
-                                            # if min(abs(m - non_open_supp_index)) >= 1:
-                                            if m not in non_open_supp_index:
-                                                T_ex.append( [ [i, m ], [j,  int(max( time_windows[i][0], t_e) )] ])
+                            if (t_e not in non_open_supp_set) and (t_e <= max(time_windows[j])):
+                                T_ex.append( [ [i, m ], [j,  int(max( time_windows[i][0], t_e) )] ])
+        
+        # Report pruning statistics
+        pruning_rate = (arcs_pruned / total_potential_arcs * 100) if total_potential_arcs > 0 else 0
+        print(f'Arc pruning statistics:')
+        print(f'  - Potential node pairs: {total_potential_arcs}')
+        print(f'  - Arcs pruned by distance/time: {arcs_pruned} ({pruning_rate:.1f}%)')
+        print(f'  - Arcs generated: {len(T_ex)}')
+        
         # Sanity Checks:
         for i in range(len(T_ex)):
             if T_ex[i][1][1] - T_ex[i][0][1] < 0:
