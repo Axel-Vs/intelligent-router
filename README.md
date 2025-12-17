@@ -377,21 +377,7 @@ For questions, issues, or suggestions:
 - 💬 Start a discussion
 - 🐛 Report bugs with detailed information
 
-## 📖 Citation
-
-If you use this project in your research or work, please cite:
-
-```bibtex
-@software{parcel_delivery_optimizer,
-  author = {Vargas, Axel},
-  title = {Parcel Delivery Optimizer: A Vehicle Routing Solution with OR-Tools},
-  year = {2025},
-  url = {https://github.com/Axel-Vs/parcel-delivery-solver},
-  note = {Mixed Integer Programming approach for multi-vehicle routing optimization}
-}
-```
-
-## 📚 Additional Resources
+##  Additional Resources
 
 - [OR-Tools Documentation](https://developers.google.com/optimization/routing)
 - [Vehicle Routing Problem](https://en.wikipedia.org/wiki/Vehicle_routing_problem)
