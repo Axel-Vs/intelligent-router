@@ -205,7 +205,7 @@ class DeliveryOptimizer:
         total_cargo=0
         total_load=0
         vehicle_id=1
-        vehicle_count = 1
+        route_number = 1  # Sequential route counter
         for k in index_solution:
             vehicle_id = k
             
@@ -222,7 +222,7 @@ class DeliveryOptimizer:
             if len(r[vehicle_id]) == 0:
                 continue
             
-            print('Vehicle %i:' % vehicle_count)
+            print('Route %i:' % route_number)
             
             index[vehicle_id] = []
             dist[vehicle_id] = []
@@ -408,17 +408,16 @@ class DeliveryOptimizer:
             if len(index[vehicle_id]) == 0:
                 index[vehicle_id].append(list(starting_nodes)[0])
 
-            vehicle_count += 1
             total_dist += sum(dist[vehicle_id])
             total_driv += sum(driv[vehicle_id])
             total_cargo += sum(cargo[vehicle_id]) 
             total_load += sum(load[vehicle_id]) 
 
-            print(f' - Distance Vehicle {vehicle_id}:           {int(sum(dist[vehicle_id]))} km')
-            print(f' - Total Driving Time Vehicle {vehicle_id}: {round(sum(driv[vehicle_id]), 1)} hrs')
-            print(f' - Cargo Vehicle {vehicle_id}:              {int(sum(cargo[vehicle_id]))} kg')
-            print(f' - L. Meters Vehicle {vehicle_id}:          {round(sum(load[vehicle_id]),2)} m3')
-            # vehicle_id += 1
+            print(f' - Distance Route {route_number}:           {int(sum(dist[vehicle_id]))} km')
+            print(f' - Total Driving Time Route {route_number}: {round(sum(driv[vehicle_id]), 1)} hrs')
+            print(f' - Cargo Route {route_number}:              {int(sum(cargo[vehicle_id]))} kg')
+            print(f' - L. Meters Route {route_number}:          {round(sum(load[vehicle_id]),2)} m3')
+            route_number += 1  # Increment for next route
             print('')
 
         print('')
@@ -936,6 +935,11 @@ class DeliveryOptimizer:
         
         print('🗺️  Generating route visualization with actual road routing...')
         
+        # Create sequential route numbering (1, 2, 3, ...) instead of using vehicle indices
+        route_mapping = {}  # Maps original vehicle_id to sequential route number
+        for idx, vehicle_id in enumerate(sorted(routes.keys()), start=1):
+            route_mapping[vehicle_id] = idx
+        
         # Create vendor visit mapping (vendor_id -> {vehicle, step})
         vendor_visits = {}
         for vehicle_id, route in routes.items():
@@ -944,14 +948,15 @@ class DeliveryOptimizer:
                 if node != 0:  # Not depot
                     step_num += 1
                     if node not in vendor_visits:
-                        vendor_visits[node] = {'vehicle': vehicle_id, 'step': step_num, 'total_steps': len([n for n in route if n != 0])}
+                        vendor_visits[node] = {'vehicle': vehicle_id, 'route_number': route_mapping[vehicle_id], 'step': step_num, 'total_steps': len([n for n in route if n != 0])}
         
         # Plot routes using OSRM for actual street routing
         for vehicle_id, route in routes.items():
-            color = colors[vehicle_id % len(colors)]
+            route_number = route_mapping[vehicle_id]
+            color = colors[(route_number - 1) % len(colors)]
             
-            # Create feature group for this vehicle
-            vehicle_group = folium.FeatureGroup(name=f'🚚 Vehicle {vehicle_id}', show=True)
+            # Create feature group for this vehicle with sequential numbering
+            vehicle_group = folium.FeatureGroup(name=f'🚚 Route {route_number}', show=True)
             
             # Plot route segments
             for i in range(len(route) - 1):
@@ -1013,7 +1018,7 @@ class DeliveryOptimizer:
                                 <div style="font-family: 'Segoe UI', Arial, sans-serif; min-width: 200px;">
                                     <div style="background: linear-gradient(135deg, {color} 0%, {color}DD 100%); 
                                                 color: white; padding: 12px; border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;">
-                                        <h4 style="margin: 0; font-weight: 600;">🚚 Vehicle {vehicle_id}</h4>
+                                        <h4 style="margin: 0; font-weight: 600;">🚚 Route {route_number}</h4>
                                     </div>
                                     <div style="padding: 5px 0;">
                                         <p style="margin: 8px 0; font-size: 13px;"><b>From:</b> {node_info[node_from]["name"]}</p>
@@ -1045,7 +1050,7 @@ class DeliveryOptimizer:
                                                 color: white; padding: 10px 15px; 
                                                 border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <b style="font-size: 15px;">🚚 Vehicle {vehicle_id}</b>
+                                            <b style="font-size: 15px;">🚚 Route {route_number}</b>
                                             <span style="background: rgba(255,255,255,0.2); padding: 3px 8px; 
                                                         border-radius: 12px; font-size: 11px;">Step {step_number}/{total_steps}</span>
                                         </div>
@@ -1150,7 +1155,7 @@ class DeliveryOptimizer:
                             weight=3,
                             opacity=0.4,
                             dash_array='10, 10',
-                            popup=f'Vehicle {vehicle_id}: {node_info[node_from]["name"]} → {node_info[node_to]["name"]} (Direct line - routing unavailable)',
+                            popup=f'Route {route_number}: {node_info[node_from]["name"]} → {node_info[node_to]["name"]} (Direct line - routing unavailable)',
                             tooltip=f'V{vehicle_id}: Direct line'
                         ).add_to(vehicle_group)
             
@@ -1223,6 +1228,7 @@ class DeliveryOptimizer:
                 # Get solution stage information
                 visit_info = vendor_visits.get(node_id, {})
                 assigned_vehicle = visit_info.get('vehicle', 'N/A')
+                assigned_route = visit_info.get('route_number', 'N/A')
                 visit_step = visit_info.get('step', 'N/A')
                 total_vendor_stops = visit_info.get('total_steps', 'N/A')
                 
@@ -1277,7 +1283,7 @@ class DeliveryOptimizer:
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #2c3e50;">
                                 <div>
                                     <span style="color: #777;">Assigned to:</span>
-                                    <b style="margin-left: 4px;">Vehicle {assigned_vehicle}</b>
+                                    <b style="margin-left: 4px;">Route {assigned_route}</b>
                                 </div>
                                 <div style="background: {vendor_color_hex}; color: white; padding: 4px 10px; 
                                             border-radius: 12px; font-weight: 600; font-size: 11px;">
