@@ -16,7 +16,7 @@ main_root = os.getcwd()
 
 # Define paths for configuration files, data, and results
 parameters_path = os.path.join(main_root, 'model/config')
-data_path = os.path.join(main_root, 'data/amazon_test_dataset_small.csv')  # Using medium test with 5 vendors
+data_path = os.path.join(main_root, 'data/amazon_test_dataset.csv')  # Using medium test with 5 vendors
 results_path = os.path.join(main_root, 'results/optimization')
 
 print('\nStarting Simulation\n')
@@ -30,7 +30,6 @@ df_raw = pd.read_csv(data_path)
 # Prepare a geocoded-like dataframe used by the rest of the pipeline. We do NOT
 # automatically fill missing coordinates with the configured plot center. Only
 # coordinates returned by geocoding providers (ORS or Nominatim) will be set.
-center_coords = network_params.get('plot_centered_coordinates', [47.6062, -122.3321])
 
 # Create columns the code expects (both capitalized and lowercase variants appear in code)
 df = df_raw.copy()
@@ -187,28 +186,55 @@ for w in [0.5]:
             print('Error while reading data for period:', e)
             continue
 
-        if len(vendors_df) in range(1, 15):  # Check if orders are done in that period, wrote 15 for time consumption
-            print('Length vendors:', len(vendors_df))
+        if len(vendors_df) >= 1:  # Process if there are vendors in this period
+            print(f'Number of vendors extracted: {len(vendors_df)}')
+
+            # Determine solver mode BEFORE creating time-expanded network
+            solver_mode = model_params.get('solver_mode', 'auto')
+            vendor_threshold = model_params.get('vendor_threshold', 15)
+            num_vendors = len(vendors_df)
+            
+            # Auto mode: choose solver based on problem size
+            if solver_mode == 'auto':
+                use_metaheuristic = num_vendors > vendor_threshold
+            elif solver_mode == 'metaheuristic' or solver_mode == 'alns':
+                use_metaheuristic = True
+            else:  # 'exact' or 'mip'
+                use_metaheuristic = False
 
             print('\n Create Graph')
             # Create and discretize the Graph; wrap network calls to avoid hard failure during smoke runs
             try:
                 net.create_network(complete_coordinates, vendors_df)
                 net.discretize()
-                time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(vendors_df, period[0], period[1])
                 
-                print(f'Time-expanded network created: {len(time_expanded_network)} arcs')
-                print(f'Unique nodes in network: {len(set([arc[0][0] for arc in time_expanded_network] + [arc[1][0] for arc in time_expanded_network]))}')
-                print(f'Time index range: {min(time_expanded_network_index)} to {max(time_expanded_network_index)}')
-                
-                # Check arc distribution per node
-                from collections import Counter
-                node_arcs = Counter([arc[0][0] for arc in time_expanded_network] + [arc[1][0] for arc in time_expanded_network])
-                print(f'\nArcs per node: {dict(sorted(node_arcs.items()))}')
-                
-                print(f'\nSample arcs (first 10):')
-                for i, arc in enumerate(time_expanded_network[:10]):
-                    print(f'  Arc {i}: {arc} -> Node {arc[0][0]} at time {arc[0][1]} → Node {arc[1][0]} at time {arc[1][1]}')
+                # Only create time-expanded network for exact MIP solver
+                # Metaheuristic doesn't need it and it can fail with large date ranges
+                if not use_metaheuristic:
+                    time_expanded_network, complete_time_index, time_expanded_network_index = net.create_time_network(vendors_df, period[0], period[1])
+                    
+                    # Print network statistics for MIP solver
+                    print(f'Time-expanded network created: {len(time_expanded_network)} arcs')
+                    print(f'Unique nodes in network: {len(set([arc[0][0] for arc in time_expanded_network] + [arc[1][0] for arc in time_expanded_network]))}')
+                    print(f'Time index range: {min(time_expanded_network_index)} to {max(time_expanded_network_index)}')
+                    
+                    # Check arc distribution per node
+                    from collections import Counter
+                    node_arcs = Counter([arc[0][0] for arc in time_expanded_network] + [arc[1][0] for arc in time_expanded_network])
+                    print(f'\nArcs per node: {dict(sorted(node_arcs.items()))}')
+                    
+                    print(f'\nSample arcs (first 10):')
+                    for i, arc in enumerate(time_expanded_network[:10]):
+                        print(f'  Arc {i}: {arc} -> Node {arc[0][0]} at time {arc[0][1]} → Node {arc[1][0]} at time {arc[1][1]}')
+                else:
+                    # For metaheuristic, use dummy time-expanded network and set required attributes
+                    print('✓ Skipping time-expanded network (not needed for metaheuristic)')
+                    time_expanded_network = []  # Empty list, won't be used
+                    complete_time_index = []
+                    time_expanded_network_index = []
+                    # Set dummy Tau_hours attribute (metaheuristic doesn't use it)
+                    net.Tau_hours = [0]
+                    net.min_date = pd.to_datetime(period[0])
             except Exception as e:
                 print('Skipping network creation due to error (likely ORS/network):', e)
                 continue
@@ -216,11 +242,17 @@ for w in [0.5]:
             # Create cargo and loading matrices
             capacity_matrix = cargo_vector(vendors_df)
             loading_matrix = loading_vector(vendors_df)
-
-            print('\n Solving with OR-Tools MIP solver')
-            print(f'   - Max solving time: {model_params.get("max_time", 360)} minutes')
-            print(f'   - MIP gap tolerance: {model_params.get("gap_value", 0.05)}')
-            print(f'   - Network size: {len(time_expanded_network)} arcs, {len(vendors_df)+1} nodes')
+            
+            # Print solver information (use_metaheuristic already determined above)
+            if use_metaheuristic:
+                print(f'\n 🚀 Solver: ALNS Metaheuristic (fast mode for {num_vendors} vendors)')
+                print(f'   - Max iterations: {model_params.get("alns_max_iterations", 1000)}')
+                print(f'   - Problem size: {num_vendors} vendors')
+            else:
+                print(f'\n 🎯 Solver: OR-Tools MIP (exact mode for {num_vendors} vendors)')
+                print(f'   - Max solving time: {model_params.get("max_time", 360)} minutes')
+                print(f'   - MIP gap tolerance: {model_params.get("gap_value", 0.05)}')
+                print(f'   - Network size: {len(time_expanded_network)} arcs, {num_vendors+1} nodes')
             
             try:
                 # Create optimizer instance
@@ -244,20 +276,27 @@ for w in [0.5]:
                     vendors_df=vendors_df
                 )
                 
-                print('   - Building optimization model...')
-                print(f'   - Optimizing with weight w={w} (distance) vs {1-w} (vehicles)')
-                # Build model
-                optimizer.create_model(w=w)
-                
-                print(f'   - Nodes to visit: {optimizer.nodes}')
-                print(f'   - Constraint: each node visited exactly once')
-                
                 # Set minimum date for time conversion in output
                 optimizer.min_date = net.min_date
                 
-                print('   - Solving (this may take several minutes)...')
-                # Solve
-                status, x, y = optimizer.solve_model()
+                # Solve using selected method
+                if use_metaheuristic:
+                    # Use ALNS metaheuristic solver
+                    status, x, y = optimizer.solve_with_metaheuristic(
+                        w=w,
+                        max_iterations=model_params.get('alns_max_iterations', 1000),
+                        verbose=True
+                    )
+                else:
+                    # Use exact MIP solver
+                    print('   - Building optimization model...')
+                    print(f'   - Optimizing with weight w={w} (distance) vs {1-w} (vehicles)')
+                    optimizer.create_model(w=w)
+                    
+                    print(f'   - Nodes to visit: {optimizer.nodes}')
+                    print(f'   - Constraint: each node visited exactly once')
+                    print('   - Solving (this may take several minutes)...')
+                    status, x, y = optimizer.solve_model()
                 
                 # Print results
                 print('\n Results:')
@@ -269,8 +308,9 @@ for w in [0.5]:
                     
                     optimizer.print_status(status, x, y)
                     
-                    # Plot the routes
-                    plot_path = os.path.join(results_path, f'routes_{period[0][:10]}.html')
+                    # Plot the routes with solver type in filename
+                    solver_type = 'metaheuristic' if use_metaheuristic else 'exact'
+                    plot_path = os.path.join(results_path, f'routes_{period[0][:10]}_{solver_type}.html')
                     os.makedirs(results_path, exist_ok=True)
                     optimizer.plot_routes(x, y, show_plot=True, save_path=plot_path)
                     

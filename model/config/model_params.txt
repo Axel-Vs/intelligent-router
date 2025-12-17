@@ -1,3 +1,6 @@
 {"gap": true, 
  "gap_value": 0.1, 
- "max_time": 15}
+ "max_time": 15,
+ "solver_mode": "auto",
+ "vendor_threshold": 15,
+ "alns_max_iterations": 2000}

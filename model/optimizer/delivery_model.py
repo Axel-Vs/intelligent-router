@@ -12,6 +12,15 @@ from utils.project_utils import *
 from ortools.linear_solver import pywraplp
 from pyqubo import Array, Constraint, Placeholder
 
+# Import metaheuristic solvers
+try:
+    from .alns_solver import ALNSSolver
+    from .route_solution import RouteSolution
+    from .local_search import LocalSearchOperators
+    METAHEURISTIC_AVAILABLE = True
+except ImportError:
+    METAHEURISTIC_AVAILABLE = False
+
 # Define the DeliveryOptimizer class
 class DeliveryOptimizer:
     def __init__(self, evaluation_period, discretization_constant, time_expanded_network, time_expanded_network_index,
@@ -51,6 +60,7 @@ class DeliveryOptimizer:
         # Initialize solution containers
         self.connections_solution = None
         self.vehicles_solution = None
+        self.used_metaheuristic = False
 
         # Create a solver instance with specified time limit
         self.model = pywraplp.Solver('DeliveryOptimizer', pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
@@ -94,6 +104,124 @@ class DeliveryOptimizer:
             # self.max_ldms = [self.max_ldms] * self.max_num_vehicles
 
         return status, self.x, self.y
+    
+    def solve_with_metaheuristic(self, w=0.5, max_iterations=1000, verbose=True):
+        """
+        Solve using ALNS metaheuristic instead of MIP.
+        Much faster for large instances (50+ vendors).
+        
+        Args:
+            w: Weight for objective (0.5 = balanced distance/vehicles)
+            max_iterations: Maximum ALNS iterations
+            verbose: Print progress information
+            
+        Returns:
+            tuple: (status, x, y) where:
+                - status: 0 if solution found, 2 if infeasible
+                - x: Connection matrix (converted from routes)
+                - y: Vehicle usage vector
+        """
+        if not METAHEURISTIC_AVAILABLE:
+            print("⚠️  Metaheuristic solver not available. Using MIP instead.")
+            return self.solve_model()
+        
+        if verbose:
+            print('\n🚀 Using ALNS metaheuristic solver (fast mode)')
+            print(f'   - Network size: {len(self.time_expanded_network)} arcs, {self.length} nodes')
+        
+        # Create ALNS solver with balanced parameters
+        alns_config = {
+            'max_iterations': max_iterations,
+            'min_removal_size': 0.15,
+            'max_removal_size': 0.45,
+            'initial_temperature': 1500,
+            'cooling_rate': 0.997
+        }
+        
+        alns = ALNSSolver(
+            vendors_df=self.vendors_df,
+            distance_matrix=self.distance_matrix,
+            time_matrix=self.time_distance_matrix,
+            capacity_matrix=self.capacity_matrix,
+            loading_matrix=self.loading_matrix,
+            max_capacity_kg=self.max_capacity_kg,
+            max_ldms_vc=self.max_ldms_vc,
+            discretization_constant=self.discretization_constant,
+            min_date=self.evaluation_period[0] if isinstance(self.evaluation_period, list) else self.evaluation_period,
+            config=alns_config
+        )
+        
+        # Solve with ALNS
+        solution = alns.solve(verbose=verbose)
+        
+        # Apply local search improvement
+        if verbose:
+            print('   - Applying local search improvement...')
+        solution = LocalSearchOperators.improve_solution(solution, max_iterations=100)
+        
+        # Check feasibility
+        is_feasible = solution.is_feasible(check_all=True)
+        status = 0 if is_feasible else 2
+        
+        if verbose:
+            if is_feasible:
+                print(f'   ✓ Solution found: {solution.get_num_routes()} routes, {solution.evaluate():.0f} km')
+            else:
+                print(f'   ✗ Solution infeasible: {len(solution._constraint_violations)} violations')
+                for violation in solution._constraint_violations[:5]:
+                    print(f'     - {violation}')
+        
+        # Convert route solution to MIP-style x and y matrices for compatibility
+        x, y = self._convert_routes_to_mip_format(solution)
+        
+        # Store solution and mark as metaheuristic
+        self.connections_solution = x
+        self.vehicles_solution = y
+        self.used_metaheuristic = True
+        self.metaheuristic_objective = solution.evaluate()
+        self.metaheuristic_routes = solution.get_num_routes()
+        self.secs_taken = 0  # Metaheuristic doesn't track time separately
+        
+        return status, x, y
+    
+    def _convert_routes_to_mip_format(self, route_solution):
+        """
+        Convert route-based solution to MIP format for compatibility.
+        
+        Args:
+            route_solution: RouteSolution object
+            
+        Returns:
+            tuple: (x, y) matrices compatible with MIP output format
+        """
+        # Initialize connection matrix x[k][i][ti][j][tj]
+        # For metaheuristic, use simplified structure with only time index 0
+        max_k = max(len(route_solution.routes), self.max_num_vehicles)
+        x = {}
+        
+        for k in range(max_k):
+            x[k] = {}
+            for i in range(self.length):
+                x[k][i] = {}
+                x[k][i][0] = {}  # Only time index 0 for metaheuristic
+                for j in range(self.length):
+                    x[k][i][0][j] = {}
+                    x[k][i][0][j][0] = 0  # Only time index 0 for metaheuristic
+        
+        # Fill in connections from routes
+        for k, route in enumerate(route_solution.routes):
+            for idx in range(len(route) - 1):
+                i = route[idx]
+                j = route[idx + 1]
+                # Use time index 0 for simplicity (metaheuristic doesn't use time expansion)
+                x[k][i][0][j][0] = 1
+        
+        # Create vehicle usage vector y[k]
+        y = {}
+        for k in range(max_k):
+            y[k] = 1 if k < len(route_solution.routes) else 0
+        
+        return x, y
 
     def nodes_range(time_expanded_network):
         """Static function: Gives out the feasible space of the nodes given the Time-Expanded Network.
@@ -448,38 +576,56 @@ class DeliveryOptimizer:
                 print('Distance reduction: N/A (trivial distance is 0)\n \n \n')
 
     def print_status(self, status, x, y):
-        self.connections_solution = SolVal(x)
-        self.vehicles_solution = SolVal(y)
+        # Handle both CBC solver objects and plain dictionaries
+        if isinstance(x, dict):
+            self.connections_solution = x
+            self.vehicles_solution = y
+        else:
+            self.connections_solution = SolVal(x)
+            self.vehicles_solution = SolVal(y)
+
+        # Check if metaheuristic was used
+        is_metaheuristic = getattr(self, 'used_metaheuristic', False)
 
         if status != pywraplp.Solver.INFEASIBLE:
-            if status != pywraplp.Solver.OPTIMAL:
+            if not is_metaheuristic and status != pywraplp.Solver.OPTIMAL:
                 logger.warning("Due to time constraint, the closer solution for optimality is given...")
 
-            op_num_vehicles = int(sum(self.vehicles_solution))
-            obj_value = round( self.model.Objective().Value(),2)
-
-            log.info('Optimal solution found.')
-            log.info('Objective value = ' + str( obj_value ) )
-            log.info('Number of nodes = ' + str( len(self.distance_matrix)) )
-            log.info('Number of vehicles selected = ' + str( op_num_vehicles ) )
-            log.info('Total Distance = ' + str( obj_value - np.sum(self.vehicles_solution) ) )    
-            log.info('Total Cargo = ' + str( int(sum( self.capacity_matrix)) ) )
-            log.info('Total Loading Meters = ' + str( int(sum( self.loading_matrix )) ) )     
+            op_num_vehicles = int(sum(self.vehicles_solution.values()) if isinstance(self.vehicles_solution, dict) else sum(self.vehicles_solution))
             
-            self.secs_taken = round(int(self.model.wall_time())/1000,2)
-            log.info('Problem solved in %s seconds' %  self.secs_taken) 
-            log.info('Problem solved in %s minutes' %  str((self.secs_taken)/60) ) 
+            if is_metaheuristic:
+                obj_value = self.metaheuristic_objective
+                log.info('Metaheuristic solution found.')
+            else:
+                obj_value = round(self.model.Objective().Value(), 2)
+                log.info('Optimal solution found.')
+                
+            log.info('Objective value = ' + str(obj_value))
+            log.info('Number of nodes = ' + str(len(self.distance_matrix)))
+            log.info('Number of vehicles selected = ' + str(op_num_vehicles))
+            log.info('Total Distance = ' + str(obj_value))
+            log.info('Total Cargo = ' + str(int(sum(self.capacity_matrix))))
+            log.info('Total Loading Meters = ' + str(int(sum(self.loading_matrix))))
+            
+            if not is_metaheuristic:
+                self.secs_taken = round(int(self.model.wall_time())/1000, 2)
+                log.info('Problem solved in %s seconds' % self.secs_taken)
+                log.info('Problem solved in %s minutes' % str((self.secs_taken)/60))
         else:
             logger.warning("The problem is infeasible.")
-            print(self.time_expanded_network)
-
-            obj_value = round( self.model.Objective().Value(),2)
-            print(obj_value)           
+            if not is_metaheuristic:
+                print(self.time_expanded_network)
+                obj_value = round(self.model.Objective().Value(), 2)
+                print(obj_value)           
 
 
         if status != pywraplp.Solver.INFEASIBLE:
-            
-            index_solution = information_index(self.y)
+            # For metaheuristic, extract vehicle indices from the solution
+            if is_metaheuristic:
+                index_solution = [k for k, v in self.vehicles_solution.items() if v > 0.5]
+            else:
+                index_solution = information_index(self.y)
+                
             DeliveryOptimizer.print_solution(self, self.connections_solution, index_solution, self.discretization_constant, 
                                     self.min_date, self.Tau_hours, self.distance_matrix,
                                     self.time_distance_matrix, self.disc_time_distance_matrix, self.capacity_matrix, 
@@ -495,7 +641,12 @@ class DeliveryOptimizer:
         solution_dict['disc_time_distance_matrix'] = self.disc_time_distance_matrix        
         # Solution
         solution_dict['time_needed'] = self.secs_taken
-        solution_dict['index_solution'] = information_index(self.y)
+        
+        # Handle both MIP and metaheuristic solutions
+        if getattr(self, 'used_metaheuristic', False):
+            solution_dict['index_solution'] = [k for k, v in self.vehicles_solution.items() if v > 0.5]
+        else:
+            solution_dict['index_solution'] = information_index(self.y)
         solution_dict['connections_matrix'] = self.connections_solution
         # Truck
         solution_dict['capacity_matrix'] = self.capacity_matrix
@@ -637,9 +788,13 @@ class DeliveryOptimizer:
         print(' '*25 + '📊 OPTIMIZATION SOLUTION SUMMARY')
         print('='*80)
         
-        # Get solution values
-        connections = SolVal(x)
-        vehicles = SolVal(y)
+        # Get solution values - handle both CBC solver objects and plain dictionaries
+        if isinstance(x, dict):
+            connections = x
+            vehicles = y
+        else:
+            connections = SolVal(x)
+            vehicles = SolVal(y)
         
         # Print y variables (vehicle usage)
         print('\n🚛 VEHICLE USAGE (y variables):')
@@ -663,10 +818,22 @@ class DeliveryOptimizer:
             print('-'*80)
             
             active_arcs = []
-            for arc in self.time_expanded_network:
-                i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
-                if connections[k][i][ti][j][tj] > 0.5:
-                    active_arcs.append((i, ti, j, tj))
+            
+            # Check if metaheuristic was used (stores arcs at time 0)
+            is_metaheuristic = getattr(self, 'used_metaheuristic', False)
+            
+            if is_metaheuristic:
+                # For metaheuristic: iterate through all node pairs at time 0
+                for i in range(self.length):
+                    for j in range(self.length):
+                        if i != j and connections[k][i][0][j][0] > 0.5:
+                            active_arcs.append((i, 0, j, 0))
+            else:
+                # For MIP: iterate through time-expanded network
+                for arc in self.time_expanded_network:
+                    i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
+                    if connections[k][i][ti][j][tj] > 0.5:
+                        active_arcs.append((i, ti, j, tj))
             
             if not active_arcs:
                 print('   (No active arcs)')
@@ -773,9 +940,13 @@ class DeliveryOptimizer:
             print('⚠️  OSMnx not installed. Install with: pip install osmnx')
             return
         
-        # Get solution values
-        connections = SolVal(x)
-        vehicles = SolVal(y)
+        # Get solution values - handle both CBC solver objects and plain dictionaries
+        if isinstance(x, dict):
+            connections = x
+            vehicles = y
+        else:
+            connections = SolVal(x)
+            vehicles = SolVal(y)
         
         # Find used vehicles
         vehicles_used = [k for k in range(len(vehicles)) if vehicles[k] > 0.5]
@@ -835,16 +1006,19 @@ class DeliveryOptimizer:
             print('⚠️  Insufficient coordinate data for plotting')
             return
         
-        # Calculate center of map
+        # Calculate center and bounds of map automatically from data
         all_lats = [coord[0] for coord in coords.values()]
         all_lons = [coord[1] for coord in coords.values()]
         center_lat = sum(all_lats) / len(all_lats)
         center_lon = sum(all_lons) / len(all_lons)
         
-        # Create folium map with modern styling
+        # Calculate bounds for auto-zoom
+        min_lat, max_lat = min(all_lats), max(all_lats)
+        min_lon, max_lon = min(all_lons), max(all_lons)
+        
+        # Create folium map with automatic centering
         m = folium.Map(
             location=[center_lat, center_lon],
-            zoom_start=5,
             tiles=None,
             control_scale=True,
             zoom_control=True,
@@ -852,6 +1026,9 @@ class DeliveryOptimizer:
             dragging=True,
             prefer_canvas=True
         )
+        
+        # Fit map to show all points with padding
+        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=[50, 50])
         
         # Add different tile layers with aesthetic options (first one is default)
         folium.TileLayer('OpenStreetMap', name='🗺️ Street Map', attr='OpenStreetMap').add_to(m)
@@ -866,14 +1043,28 @@ class DeliveryOptimizer:
         routes = {}
         route_stats = {}  # Store vehicle statistics
         
+        # Check if metaheuristic was used (stores arcs at time 0)
+        is_metaheuristic = getattr(self, 'used_metaheuristic', False)
+        
         for k in vehicles_used:
             route_arcs = []
-            for arc in self.time_expanded_network:
-                i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
-                if connections[k][i][ti][j][tj] > 0.5:
-                    # Skip depot→vendor arcs (vehicles start at vendors, not depot)
-                    if not (i == 0 and j != 0):
-                        route_arcs.append((i, j))
+            
+            if is_metaheuristic:
+                # For metaheuristic: iterate through all node pairs at time 0
+                for i in range(self.length):
+                    for j in range(self.length):
+                        if i != j and connections[k][i][0][j][0] > 0.5:
+                            # Skip depot→vendor arcs (vehicles start at vendors, not depot)
+                            if not (i == 0 and j != 0):
+                                route_arcs.append((i, j))
+            else:
+                # For MIP: iterate through time-expanded network
+                for arc in self.time_expanded_network:
+                    i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
+                    if connections[k][i][ti][j][tj] > 0.5:
+                        # Skip depot→vendor arcs (vehicles start at vendors, not depot)
+                        if not (i == 0 and j != 0):
+                            route_arcs.append((i, j))
             
             # Build route path by following arcs (starting from vendors)
             if route_arcs:
@@ -951,12 +1142,15 @@ class DeliveryOptimizer:
                         vendor_visits[node] = {'vehicle': vehicle_id, 'route_number': route_mapping[vehicle_id], 'step': step_num, 'total_steps': len([n for n in route if n != 0])}
         
         # Plot routes using OSRM for actual street routing
+        route_feature_groups = {}  # Store feature groups for each route
+        
         for vehicle_id, route in routes.items():
             route_number = route_mapping[vehicle_id]
             color = colors[(route_number - 1) % len(colors)]
             
-            # Create feature group for this vehicle with sequential numbering
+            # Create individual feature group for this route
             vehicle_group = folium.FeatureGroup(name=f'🚚 Route {route_number}', show=True)
+            route_feature_groups[route_number] = vehicle_group
             
             # Plot route segments
             for i in range(len(route) - 1):
@@ -1003,17 +1197,33 @@ class DeliveryOptimizer:
                                 
                                 # Get distance and duration
                                 distance_km = data['routes'][0]['distance'] / 1000
-                                duration_hrs = data['routes'][0]['duration'] / 3600
+                                duration_sec = data['routes'][0]['duration']
+                                duration_hrs = duration_sec / 3600
                                 
-                                # Draw shadow/outline for depth effect
-                                folium.PolyLine(
-                                    route_coords,
-                                    color='#000000',
-                                    weight=6,
-                                    opacity=0.2
-                                ).add_to(vehicle_group)
+                                # Handle same-location pickups (multiple vendors at same address)
+                                is_same_location = (distance_km < 0.1 and duration_hrs < 0.01)
+                                
+                                if is_same_location:
+                                    # Multiple cargo pickups at same location - show special marker
+                                    avg_speed = 0
+                                    location_note = "📍 <b>Same Location</b> - Multiple pickups at this address"
+                                else:
+                                    # Calculate avg speed safely for normal routes
+                                    avg_speed = distance_km / duration_hrs if duration_hrs > 0 else 0
+                                    location_note = ""
+                                
+                                # Draw shadow/outline for depth effect (skip for same location)
+                                if not is_same_location:
+                                    folium.PolyLine(
+                                        route_coords,
+                                        color='#000000',
+                                        weight=6,
+                                        opacity=0.2
+                                    ).add_to(vehicle_group)
                                 
                                 # Draw the actual route on the map with modern styling
+                                speed_display = f'💨 Avg Speed: {avg_speed:.0f} km/h' if not is_same_location else location_note
+                                
                                 popup_html = f"""
                                 <div style="font-family: 'Segoe UI', Arial, sans-serif; min-width: 200px;">
                                     <div style="background: linear-gradient(135deg, {color} 0%, {color}DD 100%); 
@@ -1024,14 +1234,14 @@ class DeliveryOptimizer:
                                         <p style="margin: 8px 0; font-size: 13px;"><b>From:</b> {node_info[node_from]["name"]}</p>
                                         <p style="margin: 8px 0; font-size: 13px;"><b>To:</b> {node_info[node_to]["name"]}</p>
                                         <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
+                                        {'<p style="margin: 8px 0; font-size: 12px; background: #fff3cd; padding: 6px; border-radius: 4px;">' + location_note + '</p>' if is_same_location else ''}
                                         <p style="margin: 8px 0; font-size: 13px;">📏 <b>Distance:</b> {distance_km:.1f} km</p>
-                                        <p style="margin: 8px 0; font-size: 13px;">⏱️ <b>Duration:</b> {duration_hrs:.1f} hrs</p>
-                                        <p style="margin: 8px 0; font-size: 12px; color: #666;">💨 Avg Speed: {distance_km/duration_hrs:.0f} km/h</p>
+                                        <p style="margin: 8px 0; font-size: 13px;">⏱️ <b>Duration:</b> {duration_hrs:.2f} hrs</p>
+                                        <p style="margin: 8px 0; font-size: 12px; color: #666;">{speed_display}</p>
                                     </div>
                                 </div>
                                 """
                                 # Enhanced tooltip with comprehensive route solution info
-                                avg_speed = distance_km / duration_hrs if duration_hrs > 0 else 0
                                 
                                 # Get vehicle statistics
                                 v_stats = route_stats.get(vehicle_id, {})
@@ -1039,6 +1249,20 @@ class DeliveryOptimizer:
                                 total_loading = v_stats.get('total_loading', 0)
                                 total_distance = v_stats.get('total_distance', 0)
                                 num_vendors = v_stats.get('num_vendors', 0)
+                                vendors_in_route = v_stats.get('vendors', [])
+                                
+                                # Build vendor list HTML (remove duplicates while preserving order)
+                                vendor_list_html = ""
+                                if vendors_in_route:
+                                    vendor_list_items = []
+                                    seen_vendors = set()
+                                    for v_id in vendors_in_route:
+                                        if v_id not in seen_vendors:
+                                            seen_vendors.add(v_id)
+                                            v_name = node_info.get(v_id, {}).get('name', f'Vendor {v_id}')
+                                            v_city = node_info.get(v_id, {}).get('city', 'N/A')
+                                            vendor_list_items.append(f'<li style="margin: 2px 0; font-size: 10px;">📍 {v_name} ({v_city})</li>')
+                                    vendor_list_html = ''.join(vendor_list_items)
                                 
                                 # Calculate capacity utilization
                                 cargo_utilization = (total_cargo / self.max_capacity_kg[vehicle_id]) * 100 if vehicle_id < len(self.max_capacity_kg) else 0
@@ -1056,6 +1280,7 @@ class DeliveryOptimizer:
                                         </div>
                                     </div>
                                     <div style="padding: 8px 0;">
+                                        {'<div style="background: #fff3cd; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #ffc107;"><p style="margin: 0; font-size: 10px; color: #856404;">' + location_note + '</p></div>' if is_same_location else ''}
                                         <div style="background: #f8f9fa; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px;">
                                             <p style="margin: 3px 0; font-size: 12px;">
                                                 <b>From:</b> {node_info[node_from]["name"]} ({node_info[node_from].get('city', 'N/A') if node_from != 0 else 'Seattle'})
@@ -1084,12 +1309,9 @@ class DeliveryOptimizer:
                                                 </tr>
                                                 <tr>
                                                     <td>⏱️ Duration:</td>
-                                                    <td style="text-align: right;"><b>{duration_hrs:.1f} hrs</b></td>
+                                                    <td style="text-align: right;"><b>{duration_hrs:.2f} hrs</b></td>
                                                 </tr>
-                                                <tr>
-                                                    <td>💨 Avg Speed:</td>
-                                                    <td style="text-align: right;"><b>{avg_speed:.0f} km/h</b></td>
-                                                </tr>
+                                                {'<tr><td>💨 Avg Speed:</td><td style="text-align: right;"><b>' + f'{avg_speed:.0f}' + ' km/h</b></td></tr>' if not is_same_location else ''}
                                             </table>
                                             
                                             <div style="border-left: 3px solid {color}; padding-left: 8px; margin-bottom: 8px;">
@@ -1114,6 +1336,13 @@ class DeliveryOptimizer:
                                                 </tr>
                                             </table>
                                             
+                                            <div style="border-left: 3px solid {color}; padding-left: 8px; margin-bottom: 8px;">
+                                                <b>Vendors in Route:</b>
+                                            </div>
+                                            <ul style="margin: 0; padding-left: 15px; max-height: 150px; overflow-y: auto;">
+                                                {vendor_list_html}
+                                            </ul>
+                                            
                                             <div style="background: #e8f5e9; padding: 6px 8px; border-radius: 4px; margin-top: 8px;">
                                                 <div style="font-size: 10px; color: #2e7d32;">
                                                     <b>Capacity Utilization:</b>
@@ -1132,15 +1361,30 @@ class DeliveryOptimizer:
                                     </div>
                                 </div>
                                 """
-                                folium.PolyLine(
-                                    route_coords,
-                                    color=color,
-                                    weight=5,
-                                    opacity=0.9,
-                                    popup=folium.Popup(popup_html, max_width=280),
-                                    tooltip=folium.Tooltip(tooltip_html, sticky=True),
-                                    smooth_factor=2.0
-                                ).add_to(vehicle_group)
+                                # Draw route line (or marker for same location)
+                                if is_same_location:
+                                    # For same location pickups, draw a small circular arrow indicator
+                                    folium.CircleMarker(
+                                        location=(lat_from, lon_from),
+                                        radius=8,
+                                        color=color,
+                                        fill=True,
+                                        fillColor=color,
+                                        fillOpacity=0.6,
+                                        popup=folium.Popup(popup_html, max_width=280),
+                                        tooltip=folium.Tooltip(tooltip_html, sticky=False, direction='auto')
+                                    ).add_to(vehicle_group)
+                                else:
+                                    # Normal route with polyline
+                                    folium.PolyLine(
+                                        route_coords,
+                                        color=color,
+                                        weight=5,
+                                        opacity=0.9,
+                                        popup=folium.Popup(popup_html, max_width=280),
+                                        tooltip=folium.Tooltip(tooltip_html, sticky=False, direction='auto'),
+                                        smooth_factor=2.0
+                                    ).add_to(vehicle_group)
                             else:
                                 raise Exception("No route found")
                         else:
@@ -1159,6 +1403,7 @@ class DeliveryOptimizer:
                             tooltip=f'V{vehicle_id}: Direct line'
                         ).add_to(vehicle_group)
             
+            # Add route group to map
             vehicle_group.add_to(m)
         
         # Add markers for all nodes with clear differentiation
@@ -1194,7 +1439,7 @@ class DeliveryOptimizer:
                 folium.Marker(
                     location=[lat, lon],
                     popup=folium.Popup(popup_html, max_width=300),
-                    tooltip='<b style="font-size: 14px;">🏭 Distribution Center</b>',
+                    tooltip=folium.Tooltip('<b style="font-size: 14px;">🏭 Distribution Center</b>', direction='auto'),
                     icon=folium.Icon(
                         color='red', 
                         icon='warehouse',
@@ -1308,7 +1553,7 @@ class DeliveryOptimizer:
                 folium.Marker(
                     location=[lat, lon],
                     popup=folium.Popup(popup_html, max_width=320),
-                    tooltip=f"<b style='font-size: 13px;'>🏭 {info['name']}</b><br><span style='font-size: 11px;'>{info['city']}</span>",
+                    tooltip=folium.Tooltip(f"<b style='font-size: 13px;'>🏭 {info['name']}</b><br><span style='font-size: 11px;'>{info['city']}</span>", direction='auto'),
                     icon=folium.Icon(
                         color=vendor_color,
                         icon='industry',
@@ -1355,9 +1600,20 @@ class DeliveryOptimizer:
         minimap = plugins.MiniMap(toggle_display=True, position='bottomright')
         m.add_child(minimap)
         
-        # Add title/legend as custom HTML
+        # Calculate total distance across all routes
+        total_distance = sum(stats['total_distance'] for stats in route_stats.values())
+        distance_formatted = f'{total_distance:,.1f}'
+        
+        # Get solver info
+        solver_type = 'Metaheuristic (ALNS)' if is_metaheuristic else 'Exact (MIP)'
+        solving_time = getattr(self, 'secs_taken', 0)
+        num_depots = 1
+        num_routes = len(vehicles_used)
+        num_vendors = len(coords) - 1
+        
+        # Add title/legend as custom HTML with working hover tooltip
         title_html = f'''
-        <div style="position: fixed; 
+        <div id="route-title-card" style="position: fixed; 
                     top: 10px; 
                     left: 50%; 
                     transform: translateX(-50%);
@@ -1367,7 +1623,9 @@ class DeliveryOptimizer:
                     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                     padding: 15px 30px;
                     z-index: 9999;
-                    border: 1px solid rgba(0,0,0,0.1);">
+                    border: 1px solid rgba(0,0,0,0.1);
+                    cursor: help;
+                    position: relative;">
             <h3 style="margin: 0; 
                        color: #2c3e50; 
                        font-family: 'Segoe UI', Arial, sans-serif;
@@ -1380,11 +1638,222 @@ class DeliveryOptimizer:
                       color: #7f8c8d; 
                       font-size: 13px;
                       text-align: center;">
-                {len(vehicles_used)} Vehicle{'s' if len(vehicles_used) > 1 else ''} • {len(coords)-1} Vendor{'s' if len(coords)-1 > 1 else ''}
+                {num_routes} Vehicle{'s' if num_routes > 1 else ''} • {num_vendors} Vendor{'s' if num_vendors > 1 else ''} • {distance_formatted} km
             </p>
         </div>
+        
+        <div id="route-tooltip" style="display: none;
+                    position: fixed;
+                    background: rgba(30, 30, 40, 0.98);
+                    color: white;
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                    font-family: 'Segoe UI', sans-serif;
+                    font-size: 13px;
+                    line-height: 2;
+                    z-index: 10000;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    pointer-events: none;">
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 8px; margin-bottom: 8px; font-weight: 600;">
+                Solution Details
+            </div>
+            <div><strong>Solver:</strong> {solver_type}</div>
+            <div><strong>Time:</strong> {solving_time:.2f}s</div>
+            <div><strong>Depots:</strong> {num_depots}</div>
+            <div><strong>Routes:</strong> {num_routes}</div>
+            <div><strong>Vendors:</strong> {num_vendors}</div>
+            <div><strong>Distance:</strong> {distance_formatted} km</div>
+        </div>
+        
+        <script>
+            (function() {{
+                var titleCard = document.getElementById('route-title-card');
+                var tooltip = document.getElementById('route-tooltip');
+                
+                if (titleCard && tooltip) {{
+                    titleCard.addEventListener('mouseenter', function(e) {{
+                        var rect = titleCard.getBoundingClientRect();
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = rect.left + (rect.width / 2) + 'px';
+                        tooltip.style.top = (rect.bottom + 10) + 'px';
+                        tooltip.style.transform = 'translateX(-50%)';
+                    }});
+                    
+                    titleCard.addEventListener('mouseleave', function() {{
+                        tooltip.style.display = 'none';
+                    }});
+                }}
+            }})();
+        </script>
         '''
         m.get_root().html.add_child(folium.Element(title_html))
+        
+        # Add Excel-like collapsible route filter
+        num_routes = len(route_feature_groups)
+        excel_filter_html = f'''
+        <style>
+            .route-filter-header {{
+                padding: 10px 12px;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                background: transparent;
+                margin: 0;
+                cursor: pointer;
+                user-select: none;
+                font-weight: 600;
+                font-size: 13px;
+                color: #333;
+            }}
+            .route-filter-header:hover {{
+                background: rgba(0, 0, 0, 0.03);
+            }}
+            .route-filter-arrow {{
+                display: inline-block;
+                margin-right: 8px;
+                transition: transform 0.2s;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            .route-filter-arrow.expanded {{
+                transform: rotate(90deg);
+            }}
+            .route-filter-content {{
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-out;
+                background: transparent;
+            }}
+            .route-filter-content.show {{
+                max-height: 500px;
+                overflow-y: auto;
+            }}
+            .route-filter-content label {{
+                display: block;
+                padding: 6px 12px;
+                margin: 0;
+                cursor: pointer;
+                font-size: 12px;
+                user-select: none;
+                background: transparent;
+                border-bottom: none;
+            }}
+            .route-filter-content label:hover {{
+                background: rgba(0, 0, 0, 0.05);
+            }}
+            .route-filter-content input[type="checkbox"] {{
+                margin-right: 8px;
+                cursor: pointer;
+            }}
+            .select-all-option {{
+                font-weight: 600;
+                color: #2196F3;
+                background: rgba(33, 150, 243, 0.1) !important;
+                border-bottom: 1px solid rgba(33, 150, 243, 0.3) !important;
+            }}
+        </style>
+        
+        <script>
+            function initializeRouteFilter() {{
+                var layerControl = document.querySelector('.leaflet-control-layers-overlays');
+                if (!layerControl) {{
+                    setTimeout(initializeRouteFilter, 100);
+                    return;
+                }}
+                
+                // Check if already initialized
+                if (document.querySelector('.route-filter-header')) return;
+                
+                // Create filter header
+                var filterHeader = document.createElement('div');
+                filterHeader.className = 'route-filter-header';
+                filterHeader.innerHTML = '<span class="route-filter-arrow">▶</span>🚚 Routes ({num_routes})';
+                
+                // Create filter content container
+                var filterContent = document.createElement('div');
+                filterContent.className = 'route-filter-content';
+                
+                // Add Select All option
+                var selectAllLabel = document.createElement('label');
+                selectAllLabel.className = 'select-all-option';
+                selectAllLabel.innerHTML = '<input type="checkbox" id="route-select-all" checked> (Select All)';
+                filterContent.appendChild(selectAllLabel);
+                
+                // Store original labels for syncing
+                var originalLabels = [];
+                var allLabels = Array.from(layerControl.querySelectorAll('label'));
+                allLabels.forEach(function(label) {{
+                    var labelText = label.textContent || label.innerText;
+                    if (labelText.includes('🚚 Route')) {{
+                        originalLabels.push(label);
+                        
+                        // Create visual clone for our filter
+                        var clonedLabel = document.createElement('label');
+                        clonedLabel.innerHTML = label.innerHTML;
+                        
+                        // Get the original checkbox
+                        var originalCheckbox = label.querySelector('input[type="checkbox"]');
+                        var clonedCheckbox = clonedLabel.querySelector('input[type="checkbox"]');
+                        
+                        // Sync cloned checkbox with original
+                        if (clonedCheckbox && originalCheckbox) {{
+                            clonedCheckbox.checked = originalCheckbox.checked;
+                            
+                            // When cloned checkbox is clicked, trigger original
+                            clonedCheckbox.addEventListener('change', function() {{
+                                originalCheckbox.click();
+                            }});
+                            
+                            // Listen to original checkbox changes to update clone
+                            originalCheckbox.addEventListener('change', function() {{
+                                clonedCheckbox.checked = originalCheckbox.checked;
+                            }});
+                        }}
+                        
+                        filterContent.appendChild(clonedLabel);
+                        label.style.display = 'none'; // Hide original
+                    }}
+                }});
+                
+                // Insert at the top of layer control
+                layerControl.insertBefore(filterContent, layerControl.firstChild);
+                layerControl.insertBefore(filterHeader, layerControl.firstChild);
+                
+                // Toggle expand/collapse
+                filterHeader.addEventListener('click', function() {{
+                    var arrow = this.querySelector('.route-filter-arrow');
+                    arrow.classList.toggle('expanded');
+                    filterContent.classList.toggle('show');
+                }});
+                
+                // Handle Select All checkbox
+                var selectAllCheckbox = document.getElementById('route-select-all');
+                if (selectAllCheckbox) {{
+                    selectAllCheckbox.addEventListener('change', function(e) {{
+                        e.stopPropagation();
+                        var isChecked = selectAllCheckbox.checked;
+                        
+                        // Trigger all original checkboxes
+                        originalLabels.forEach(function(label) {{
+                            var checkbox = label.querySelector('input[type="checkbox"]');
+                            if (checkbox && checkbox.checked !== isChecked) {{
+                                checkbox.click();
+                            }}
+                        }});
+                    }});
+                }}
+                
+                console.log('Route filter initialized with', {num_routes}, 'routes');
+            }}
+            
+            // Initialize when page loads
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', initializeRouteFilter);
+            }} else {{
+                setTimeout(initializeRouteFilter, 500);
+            }}
+        </script>
+        '''
+        m.get_root().html.add_child(folium.Element(excel_filter_html))
         
         # Fit bounds to show all markers
         m.fit_bounds([[min(all_lats), min(all_lons)], [max(all_lats), max(all_lons)]])

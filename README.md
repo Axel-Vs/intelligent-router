@@ -10,11 +10,12 @@ A sophisticated optimization system for vehicle routing and parcel delivery, lev
 
 - 🚚 **Multi-Vehicle Routing Optimization** - Efficiently assigns parcels to vehicles and optimizes delivery routes
 - 🗺️ **Interactive Map Visualization** - Beautiful Folium-based maps with real road routing via OSRM
-- ⏱️ **Time-Expanded Network** - Discrete time modeling for precise delivery scheduling
+- ⏱️ **Dual Solver Architecture** - CBC MIP for exact solutions + ALNS metaheuristic for large-scale problems
 - 📊 **Comprehensive Analytics** - Detailed route statistics, capacity utilization, and performance metrics
 - 🌍 **Real-World Routing** - Uses OSRM for accurate distance and travel time calculations
 - 📍 **Geocoding Support** - Automatic address-to-coordinate conversion with caching
-- 💡 **Flexible Solver** - CBC MIP solver with configurable optimization parameters
+- 🎯 **Scalable to 50+ Vendors** - Handles large datasets with metaheuristic optimization
+- 📱 **Excel-Style Route Filter** - Collapsible, transparent UI for easy route management
 
 ## 🎯 Key Capabilities
 
@@ -27,16 +28,24 @@ A sophisticated optimization system for vehicle routing and parcel delivery, lev
 
 ### Visualization
 - **Interactive Maps** with multiple tile layers (Street, Light, Dark, Terrain)
+- **Excel-Style Route Filter**:
+  - Collapsible dropdown with transparent background
+  - Select All/Deselect All functionality
+  - Individual route visibility controls
+  - Real-time route toggling
 - **Route Tooltips** showing:
   - Step-by-step segment information
   - Cargo and loading pickup details
   - Distance, duration, and average speed
-  - Complete route summaries
+  - Complete route summaries with all vendors
   - Capacity utilization percentages
 - **Vendor Markers** displaying:
   - Cargo to pickup (weight and volume)
   - Assigned vehicle and stop number
   - Location details
+- **Same-Location Handling**:
+  - Circular markers for multiple vendors at same address
+  - Special visual indicators for co-located pickups
 
 ### Data Processing
 - CSV-based vendor and parcel data
@@ -122,10 +131,14 @@ vendor_latitude,vendor_longitude,recipient_latitude,recipient_longitude,vendor N
 
 ### Model Parameters (`model/config/model_params.txt`)
 ```ini
-max_nodes = 50                    # Maximum number of nodes to process
+max_nodes = 100                   # Maximum number of nodes to process
 solver_time_limit = 900          # Solver timeout in seconds (15 minutes)
 mip_gap_tolerance = 0.1          # MIP optimality gap (10%)
 optimization_weight = 0.5        # Balance: distance (0.5) vs vehicle count (0.5)
+use_metaheuristic = True         # Auto-switch to ALNS for large problems
+alns_iterations = 2000           # ALNS: number of iterations
+alns_temperature = 1500          # ALNS: initial temperature
+alns_cooling = 0.997             # ALNS: cooling rate
 ```
 
 ### Network Parameters (`model/config/network_params.txt`)
@@ -202,13 +215,16 @@ Distance reduction achieved: 24.03%
 
 **Map Controls:**
 - 🗺️ Multiple tile layers (Street Map, Light, Dark, Terrain)
+- � Excel-style collapsible route filter with Select All
 - 🔍 Mini-map for context
 - 📏 Distance measurement tool
 - 🖥️ Fullscreen mode
 - 📍 Mouse position coordinates
+- 👁️ Individual route visibility toggles
 
 ### Saved Files
-- `results/optimization/routes_[date].html` - Interactive map visualization
+- `results/optimization/routes_[date]_metaheuristic.html` - Interactive map (ALNS solver)
+- `results/optimization/routes_[date].html` - Interactive map (CBC solver)
 - `results/optimization/solution[N]_[date].npy` - Numpy arrays with decision variables
 - `data/geocode_cache.csv` - Cached geocoding results
 
@@ -244,19 +260,45 @@ parcel-delivery-solver/
 
 ## 🧮 Algorithms & Methods
 
-### OR-Tools CBC Solver
-The **Coin-or Branch and Cut (CBC)** solver is used for solving the vehicle routing problem as a Mixed Integer Programming (MIP) model.
+### Dual Solver Architecture
+
+The system intelligently selects between two optimization approaches:
+
+#### 1. OR-Tools CBC Solver (Small-Medium Problems)
+The **Coin-or Branch and Cut (CBC)** solver provides exact solutions for smaller datasets (typically <20 vendors).
 
 **Key Features:**
 - Linear programming with integer constraints
 - Branch and cut algorithm for optimal solutions
 - Configurable time limits and gap tolerance
-- Efficient handling of large-scale problems
+- Requires time-expanded network for temporal modeling
 
 **Optimization Objectives:**
 - Minimize total distance traveled
 - Minimize number of vehicles used
 - Balance trade-off via `optimization_weight` parameter
+
+#### 2. ALNS Metaheuristic (Large-Scale Problems)
+The **Adaptive Large Neighborhood Search (ALNS)** provides high-quality solutions for large datasets (20+ vendors).
+
+**Key Features:**
+- Route-based optimization (no time-expansion needed)
+- Adaptive destroy/repair operators
+- Simulated annealing acceptance criterion
+- Scales to 50+ vendors efficiently
+
+**ALNS Parameters:**
+```python
+iterations = 2000              # Total iterations
+start_temperature = 1500      # Initial acceptance temperature
+cooling_rate = 0.997          # Temperature decay
+removal_fraction = 0.15-0.45  # Vendors removed per iteration
+local_search_iterations = 100 # Local optimization steps
+```
+
+**When to Use Each:**
+- **CBC MIP**: Exact solutions, <20 vendors, time windows critical
+- **ALNS**: Fast solutions, 20-100+ vendors, large date ranges
 
 ### Time-Expanded Network
 Discretizes time into fixed periods (e.g., 4 hours) to:
@@ -319,12 +361,22 @@ Optimize deliveries for 3 vendors across the US with 2 vehicles available.
 
 **Issue: "No feasible solution found"**
 - Solutions:
+  - Switch to metaheuristic solver (set `use_metaheuristic = True`)
   - Increase `solver_time_limit` in model_params.txt
   - Increase `max_driving_hours` in network_params.txt
   - Reduce dataset size or adjust vehicle capacities
 
 **Issue: "Geocoding failed"**
 - Solution: Ensure coordinates are provided in the CSV or check Nominatim service availability
+
+**Issue: "Division by zero warnings"**
+- This is normal for vendors at the same location - the system handles it with circular markers
+
+**Issue: "max() iterable argument is empty"**
+- Solution: Use metaheuristic solver for large date ranges (set `use_metaheuristic = True`)
+
+**Issue: "Routes not toggling on map"**
+- Solution: Refresh the HTML map in your browser - checkboxes are synced with Folium layer control
 
 ## 🤝 Contributing
 
