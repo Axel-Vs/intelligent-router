@@ -15,8 +15,8 @@ from pyqubo import Array, Constraint, Placeholder
 # Define the DeliveryOptimizer class
 class DeliveryOptimizer:
     def __init__(self, evaluation_period, discretization_constant, time_expanded_network, time_expanded_network_index,
-                 Tau_hours, distance_matrix, disc_time_distance_matrix, capacity_matrix, loading_matrix,
-                 max_capacity, max_ldms, max_driving, is_gap, mip_gap, maximum_minutes):
+                 Tau_hours, distance_matrix, time_distance_matrix, disc_time_distance_matrix, capacity_matrix, loading_matrix,
+                 max_capacity, max_ldms, max_driving, is_gap, mip_gap, maximum_minutes, vendors_df=None):
         # Log information about the MIP model setup
         log.info('Defining MIP model... ')
 
@@ -27,9 +27,11 @@ class DeliveryOptimizer:
         self.time_expanded_network_index = time_expanded_network_index
         self.Tau_hours = Tau_hours
         self.distance_matrix = distance_matrix
+        self.time_distance_matrix = time_distance_matrix
         self.disc_time_distance_matrix = disc_time_distance_matrix
         self.capacity_matrix = capacity_matrix
         self.loading_matrix = loading_matrix
+        self.vendors_df = vendors_df
 
         # Calculate derived attributes
         self.des_max_driving = max_driving / discretization_constant
@@ -190,7 +192,7 @@ class DeliveryOptimizer:
         return re_dict
 
     def print_solution(self, connections_matrix, index_solution, discretization_constant, min_date, Tau_hours, distance_matrix, 
-                   disc_time_distance_matrix, capacity_matrix, loading_matrix):        
+                   time_distance_matrix, disc_time_distance_matrix, capacity_matrix, loading_matrix, vendors_df=None):        
         r = {}
         index={}
         dist={}
@@ -206,28 +208,205 @@ class DeliveryOptimizer:
         vehicle_count = 1
         for k in index_solution:
             vehicle_id = k
-            print('Vehicle %i:' % vehicle_count) 
-            r[vehicle_id] = np.argwhere( np.array(connections_matrix[k]) == 1 )
+            
+            # Extract active arcs for this vehicle from time-expanded network
+            active_arcs = []
+            for arc in self.time_expanded_network:
+                i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
+                if connections_matrix[k][i][ti][j][tj] > 0.5:
+                    active_arcs.append([i, ti, j, tj])
+            
+            r[vehicle_id] = np.array(active_arcs)
 
+            # Skip vehicles with no routes
+            if len(r[vehicle_id]) == 0:
+                continue
+            
+            print('Vehicle %i:' % vehicle_count)
+            
             index[vehicle_id] = []
             dist[vehicle_id] = []
             driv[vehicle_id] = []
             cargo[vehicle_id] = []
             load[vehicle_id] = []
-            forw_index=1
-            prev_index = 0
-            while forw_index != 0:      
-                forw_index, forw_time = next_index(r[vehicle_id], prev_index)    
-                date_time_overall, forw_time = inv_date_index(discretization_constant, forw_time, min_date, Tau_hours)
-
-                print(prev_index, '->',  forw_index, 'Arrive on', forw_time)        
-                index[vehicle_id].append(forw_index)
-                dist[vehicle_id].append( distance_matrix[prev_index][forw_index])
-                driv[vehicle_id].append( disc_time_distance_matrix[prev_index][forw_index])
-                cargo[vehicle_id].append(capacity_matrix[forw_index])
-                load[vehicle_id].append( loading_matrix[forw_index])
-
-                prev_index = forw_index
+            
+            # For pickup problem: find starting vendors (never count depot as starting point)
+            # Check if there are arcs leaving the depot
+            depot_destinations = set()
+            for arc in r[vehicle_id]:
+                if arc[0] == 0:  # Arc leaving depot
+                    depot_destinations.add(arc[2])
+            
+            if depot_destinations:
+                # If depot has outgoing arcs, start from those vendors (not depot)
+                starting_nodes = depot_destinations
+            else:
+                # No depot arcs - find nodes with outgoing but no incoming arcs (excluding depot)
+                all_origins = set([arc[0] for arc in r[vehicle_id] if arc[0] != 0])
+                all_destinations = set([arc[2] for arc in r[vehicle_id] if arc[2] != 0])
+                starting_nodes = all_origins - all_destinations
+                
+                # If still no clear starting nodes, use all non-depot origins
+                if len(starting_nodes) == 0:
+                    starting_nodes = set([arc[0] for arc in r[vehicle_id] if arc[0] != 0])
+            
+            # print(f'  Found {len(starting_nodes)} starting point(s): {sorted([int(n) for n in starting_nodes])}')
+            
+            # Process each starting node as a separate route segment
+            route_segments = []
+            route_segments_with_times = []  # Store (node, departure_time, arrival_time, travel_hours) tuples
+            for start_node in sorted(starting_nodes):
+                segment = []
+                segment_with_times = []
+                prev_index = start_node
+                prev_time = None
+                
+                # Find the time index for the starting node
+                for arc in r[vehicle_id]:
+                    if arc[2] == start_node:
+                        prev_time = arc[3]
+                        break
+                
+                # Get actual departure datetime from the starting node
+                from datetime import datetime, timedelta
+                if prev_time is not None:
+                    current_datetime, time_str = inv_date_index(discretization_constant, prev_time, min_date, Tau_hours)
+                    # For the first node, this is departure time (no arrival since we start here)
+                    segment_with_times.append((prev_index, time_str, None, 0))
+                    # Ensure current_datetime is a proper datetime object
+                    if not isinstance(current_datetime, datetime):
+                        # Parse the time string if needed
+                        current_datetime = datetime.strptime(time_str, '%Y-%m-%d at %H:%M')
+                
+                segment.append(prev_index)
+                
+                # Check if there's an arc from depot to this starting node
+                # If so, add its distance/time to the stats
+                for arc in r[vehicle_id]:
+                    if arc[0] == 0 and arc[2] == start_node:
+                        # Found depot -> starting_node arc, include it in statistics
+                        dist[vehicle_id].append(distance_matrix[0][start_node])
+                        driv[vehicle_id].append(time_distance_matrix[0][start_node] / 3600)  # Convert seconds to hours
+                        break
+                
+                # Follow the route until we reach depot (node 0) or a cycle
+                visited = set()
+                current_time = current_datetime  # Track actual clock time as we travel
+                
+                while prev_index != 0 and prev_index not in visited:
+                    visited.add(prev_index)
+                    
+                    # Add cargo/loading from the current node (where we're picking up)
+                    # This should only be added once per vendor node visited
+                    if prev_index != 0:  # Not depot
+                        cargo[vehicle_id].append(capacity_matrix[prev_index])
+                        load[vehicle_id].append(loading_matrix[prev_index])
+                    
+                    # Find next arc from this node
+                    found_next = False
+                    for arc in r[vehicle_id]:
+                        if arc[0] == prev_index:
+                            forw_index = arc[2]
+                            forw_time = arc[3]
+                            
+                            # Get actual travel time in hours from time_distance_matrix (stored in seconds)
+                            travel_time_hours = time_distance_matrix[prev_index][forw_index] / 3600  # Convert seconds to hours
+                            
+                            # Calculate actual arrival time = departure + travel time
+                            arrival_time = current_time + timedelta(hours=float(travel_time_hours))
+                            arrival_str = arrival_time.strftime('%Y-%m-%d at %H:%M')
+                            
+                            segment.append(forw_index)
+                            segment_with_times.append((forw_index, None, arrival_str, travel_time_hours))
+                            index[vehicle_id].append(forw_index)
+                            dist[vehicle_id].append(distance_matrix[prev_index][forw_index])
+                            driv[vehicle_id].append(travel_time_hours)  # Already converted to hours above
+                            
+                            prev_index = forw_index
+                            current_time = arrival_time  # Update current time for next leg
+                            found_next = True
+                            break
+                    
+                    if not found_next:
+                        break
+                
+                route_segments.append(segment)
+                route_segments_with_times.append(segment_with_times)
+            
+            # Display all route segments and identify valid pickup routes
+            valid_routes = []
+            invalid_routes = []
+            
+            for seg_idx, (segment, segment_times) in enumerate(zip(route_segments, route_segments_with_times), 1):
+                if len(segment) > 1:
+                    if segment[-1] == 0:
+                        valid_routes.append(segment)
+                        print(f'\n  ┌─ 📦 Route Timeline')
+                        # Display detailed route with departure/arrival times and travel durations
+                        for idx, (node, depart_str, arrival_str, travel_hours) in enumerate(segment_times):
+                            if node == 0:
+                                node_name = 'Depot'
+                                location_info = ''
+                            else:
+                                node_name = f'Vendor {int(node)}'
+                                # Get city and postcode from vendors_df
+                                location_info = ''
+                                if vendors_df is not None and int(node) <= len(vendors_df):
+                                    try:
+                                        vendor_row = vendors_df.iloc[int(node) - 1]
+                                        # Try multiple ways to access the columns
+                                        city = ''
+                                        postcode = ''
+                                        if 'Vendor City' in vendor_row.index:
+                                            city = str(vendor_row['Vendor City']).strip()
+                                        if 'Vendor Postcode' in vendor_row.index:
+                                            postcode = str(vendor_row['Vendor Postcode']).strip()
+                                        if city and postcode:
+                                            location_info = f' ({city}, PLZ {postcode})'
+                                    except Exception as e:
+                                        pass
+                            
+                            if idx == 0:
+                                # First node - departure point
+                                print(f'  │  🚚 Pickup: {node_name}{location_info}')
+                                print(f'  │     Departs: {depart_str}')
+                            else:
+                                # Subsequent nodes - show arrival after travel
+                                travel_str = f' ({travel_hours:.1f} hrs travel)' if travel_hours > 0 else ''
+                                if idx < len(segment_times) - 1:
+                                    print(f'  │  ⬇️  Stop at: {node_name}{location_info}')
+                                    print(f'  │     Arrives: {arrival_str}{travel_str}')
+                                else:
+                                    print(f'  │  🏁 Final Destination: {node_name}{location_info}')
+                                    print(f'  └─    Arrives: {arrival_str}{travel_str}')
+                    else:
+                        invalid_routes.append(segment)
+                        print(f'\n  ⚠️  INVALID ROUTE (disconnected):')
+                        for idx, (node, time_str) in enumerate(segment_times):
+                            node_name = 'Depot' if node == 0 else f'Vendor {int(node)}'
+                            if idx == 0:
+                                print(f'     • Start: {node_name} at {time_str}')
+                            else:
+                                print(f'     • Stop: {node_name} at {time_str}')
+                        print(f'     ⚠️  Route does NOT end at depot')
+                else:
+                    print(f'  ⚠️  Isolated node: {segment[0]}')
+            
+            # Summary
+            if valid_routes:
+                vendors_in_valid_routes = set()
+                for route in valid_routes:
+                    vendors_in_valid_routes.update([int(n) for n in route if n != 0])
+                print(f'  Summary: {len(valid_routes)} valid route(s) serving vendors {sorted(vendors_in_valid_routes)}')
+            
+            if invalid_routes:
+                vendors_in_invalid_routes = set()
+                for route in invalid_routes:
+                    vendors_in_invalid_routes.update([int(n) for n in route if n != 0])
+                print(f'  ⚠️  WARNING: {len(invalid_routes)} disconnected cycle(s) involving vendors {sorted(vendors_in_invalid_routes)}')
+            
+            if len(index[vehicle_id]) == 0:
+                index[vehicle_id].append(list(starting_nodes)[0])
 
             vehicle_count += 1
             total_dist += sum(dist[vehicle_id])
@@ -235,10 +414,10 @@ class DeliveryOptimizer:
             total_cargo += sum(cargo[vehicle_id]) 
             total_load += sum(load[vehicle_id]) 
 
-            print(' - Distance Vehicle %i:           '% vehicle_id, int(sum(dist[vehicle_id])), 'km')
-            print(' - Total Driving Time Vehicle %i: '% vehicle_id, int(sum(driv[vehicle_id])*discretization_constant ), 'hrs')
-            print(' - Cargo Vehicle %i:              '% vehicle_id, int(sum(cargo[vehicle_id])), 'kg' )
-            print(' - L. Meters Vehicle %i:          '% vehicle_id, round(sum(load[vehicle_id]),2), 'm3' )
+            print(f' - Distance Vehicle {vehicle_id}:           {int(sum(dist[vehicle_id]))} km')
+            print(f' - Total Driving Time Vehicle {vehicle_id}: {round(sum(driv[vehicle_id]), 1)} hrs')
+            print(f' - Cargo Vehicle {vehicle_id}:              {int(sum(cargo[vehicle_id]))} kg')
+            print(f' - L. Meters Vehicle {vehicle_id}:          {round(sum(load[vehicle_id]),2)} m3')
             # vehicle_id += 1
             print('')
 
@@ -249,22 +428,25 @@ class DeliveryOptimizer:
             print('Total Cargo %i kg'%total_cargo)
             print('Total Loading Meters %i m3'%round(total_load,2))
 
-        # Compute distance saved.
-        nodes_visited = []
-        for i in index.keys():
-            nodes_visited.extend(index[i])
-        nodes_visited = np.unique(nodes_visited)
-
+        # Compute distance saved compared to trivial solution
+        # Trivial solution: each vendor sends one vehicle directly to depot
+        # All vendor nodes are nodes 1, 2, 3, ... (depot is node 0)
+        num_nodes = len(distance_matrix)
+        vendor_nodes = range(1, num_nodes)  # Exclude depot (node 0)
+        
         before_dist = 0
-        for i in nodes_visited:
-            before_dist += distance_matrix[i][0]
+        for vendor_node in vendor_nodes:
+            before_dist += distance_matrix[vendor_node][0]
         before_dist = int(round(before_dist,0))
 
         if total_dist == 0:
             print('No more routes to optimize.')
         else:
             print('Trivial distance:', before_dist, 'km')
-            print('Distance reduction achieved:', round(( (before_dist - total_dist) /before_dist) *100,2), '% \n \n \n')
+            if before_dist > 0:
+                print('Distance reduction achieved:', round(( (before_dist - total_dist) /before_dist) *100,2), '% \n \n \n')
+            else:
+                print('Distance reduction: N/A (trivial distance is 0)\n \n \n')
 
     def print_status(self, status, x, y):
         self.connections_solution = SolVal(x)
@@ -300,10 +482,9 @@ class DeliveryOptimizer:
             
             index_solution = information_index(self.y)
             DeliveryOptimizer.print_solution(self, self.connections_solution, index_solution, self.discretization_constant, 
-                                    self.min_date, self.Tau_hours, self.distance_matrix, 
-                                    self.disc_time_distance_matrix, self.capacity_matrix, 
-                                    self.loading_matrix)
-
+                                    self.min_date, self.Tau_hours, self.distance_matrix,
+                                    self.time_distance_matrix, self.disc_time_distance_matrix, self.capacity_matrix, 
+                                    self.loading_matrix, self.vendors_df)
 
     def save_solution(self, path):
         # Store solution ----------------------------------------------------------------------------------------
@@ -449,3 +630,770 @@ class DeliveryOptimizer:
         
         log.info('HF Finished...') 
         return HF_model
+
+    def print_solution_summary(self, x, y):
+        """Print decision variables x and y in a friendly, readable format."""
+        
+        print('\n' + '='*80)
+        print(' '*25 + '📊 OPTIMIZATION SOLUTION SUMMARY')
+        print('='*80)
+        
+        # Get solution values
+        connections = SolVal(x)
+        vehicles = SolVal(y)
+        
+        # Print y variables (vehicle usage)
+        print('\n🚛 VEHICLE USAGE (y variables):')
+        print('-'*80)
+        vehicles_used = []
+        for k in range(len(vehicles)):
+            if vehicles[k] > 0.5:
+                vehicles_used.append(k)
+                print(f'   ✓ y[{k}] = {int(vehicles[k])}  → Vehicle {k} is USED')
+            else:
+                print(f'   ✗ y[{k}] = {int(vehicles[k])}  → Vehicle {k} is NOT USED')
+        
+        print(f'\n   📦 Total vehicles in solution: {len(vehicles_used)}')
+        
+        # Print x variables (arc assignments) for each used vehicle
+        print('\n\n🗺️  ROUTE ASSIGNMENTS (x variables):')
+        print('='*80)
+        
+        for k in vehicles_used:
+            print(f'\n🚚 Vehicle {k}:')
+            print('-'*80)
+            
+            active_arcs = []
+            for arc in self.time_expanded_network:
+                i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
+                if connections[k][i][ti][j][tj] > 0.5:
+                    active_arcs.append((i, ti, j, tj))
+            
+            if not active_arcs:
+                print('   (No active arcs)')
+                continue
+            
+            # Display arcs with time conversion
+            for idx, (i, ti, j, tj) in enumerate(active_arcs, 1):
+                # Convert time indices to readable dates
+                _, time_origin = inv_date_index(self.discretization_constant, ti, self.min_date, self.Tau_hours)
+                _, time_dest = inv_date_index(self.discretization_constant, tj, self.min_date, self.Tau_hours)
+                
+                node_origin = "Depot" if i == 0 else f"Vendor {i}"
+                node_dest = "Depot" if j == 0 else f"Vendor {j}"
+                
+                print(f'\n   Arc {idx}: x[{k}][{i}][{ti}][{j}][{tj}] = 1')
+                print(f'   ├─ Origin: {node_origin} at {time_origin}')
+                print(f'   └─ Destination: {node_dest} at {time_dest}')
+            
+            # Analyze route structure by building the actual path
+            print(f'\n   Route Analysis:')
+            
+            # Build adjacency list
+            arc_dict = {}
+            for i, ti, j, tj in active_arcs:
+                arc_dict[(i, ti)] = (j, tj)
+            
+            # Find all nodes visited
+            all_nodes = set([arc[0] for arc in active_arcs] + [arc[2] for arc in active_arcs])
+            all_vendors = sorted([n for n in all_nodes if n != 0])
+            print(f'   ├─ Nodes visited: Depot + Vendors {all_vendors}')
+            
+            # Try to trace the complete route
+            route_path = []
+            # Look for arc starting from depot
+            depot_start_arc = None
+            for (i, ti), (j, tj) in arc_dict.items():
+                if i == 0:
+                    depot_start_arc = (i, ti)
+                    break
+            
+            if depot_start_arc:
+                # Trace route starting from depot
+                current = depot_start_arc
+                visited = set()
+                route_path.append(current[0])  # Start node
+                
+                while current in arc_dict and current not in visited:
+                    visited.add(current)
+                    next_node, next_time = arc_dict[current]
+                    route_path.append(next_node)
+                    current = (next_node, next_time)
+                
+                # Display the route
+                route_str = ' → '.join(['Depot' if n == 0 else f'V{n}' for n in route_path])
+                print(f'   ├─ Complete path: {route_str}')
+                
+                # Classify route type
+                if route_path[0] == 0 and route_path[-1] == 0:
+                    print(f'   └─ ⚠️  DELIVERY PROBLEM: Round-trip starting from Depot')
+                    print(f'      Note: For pickup problem, vehicles should START at vendors, not depot')
+                elif route_path[0] != 0 and route_path[-1] == 0:
+                    print(f'   └─ ✓ PICKUP ROUTE: Starts at Vendor {route_path[0]}, ends at Depot')
+                else:
+                    print(f'   └─ ⚠️  Incomplete route or cycle')
+            else:
+                # No depot start - look for vendor starts
+                origins = set([arc[0] for arc in active_arcs])
+                destinations = set([arc[2] for arc in active_arcs])
+                starting_nodes = origins - destinations
+                ending_nodes = destinations - origins
+                
+                if starting_nodes and 0 in ending_nodes:
+                    vendor_starts = [n for n in starting_nodes if n != 0]
+                    if vendor_starts:
+                        print(f'   ├─ Starting vendors: {sorted(vendor_starts)}')
+                        print(f'   ├─ Ending at: Depot')
+                        print(f'   └─ ✓ PICKUP ROUTE(S): Vendor(s) → Depot')
+                else:
+                    print(f'   └─ ⚠️  Disconnected arcs or cycle')
+        
+        print('\n' + '='*80)
+        print(' '*30 + 'END OF SOLUTION')
+        print('='*80 + '\n')
+
+    def plot_routes(self, x, y, show_plot=True, save_path=None):
+        """Plot the optimized routes on an interactive map using Folium and OSMnx.
+        
+        Args:
+            x: Decision variable for arc assignments
+            y: Decision variable for vehicle usage
+            show_plot: Whether to open the map in browser (default: True)
+            save_path: Path to save the HTML map (optional, defaults to routes_map.html)
+        """
+        try:
+            import folium
+            from folium import plugins
+        except ImportError:
+            print('⚠️  Folium not installed. Install with: pip install folium')
+            return
+        
+        try:
+            import osmnx as ox
+        except ImportError:
+            print('⚠️  OSMnx not installed. Install with: pip install osmnx')
+            return
+        
+        # Get solution values
+        connections = SolVal(x)
+        vehicles = SolVal(y)
+        
+        # Find used vehicles
+        vehicles_used = [k for k in range(len(vehicles)) if vehicles[k] > 0.5]
+        
+        if not vehicles_used:
+            print('⚠️  No vehicles used in solution - nothing to plot')
+            return
+        
+        # Extract coordinates from vendors_df
+        if self.vendors_df is None:
+            print('⚠️  No vendor data available for plotting')
+            return
+        
+        # Build coordinate mapping: node_id -> (lat, lon) and node info
+        coords = {}
+        node_info = {}
+        
+        # Depot is node 0 - get from first vendor's recipient coordinates
+        depot_lat = None
+        depot_lon = None
+        
+        if len(self.vendors_df) > 0:
+            depot_lat = self.vendors_df.iloc[0].get('recipient_latitude', None)
+            depot_lon = self.vendors_df.iloc[0].get('recipient_longitude', None)
+            
+            # If recipient coordinates not available, use Seattle as default depot
+            if depot_lat is None or depot_lon is None:
+                print('⚠️  Depot coordinates not found, using Seattle as default')
+                depot_lat = 47.6062  # Seattle
+                depot_lon = -122.3321
+            
+            coords[0] = (depot_lat, depot_lon)
+            node_info[0] = {'name': 'Depot (Seattle)', 'type': 'depot'}
+            print(f'📍 Depot coordinates: {depot_lat}, {depot_lon}')
+        
+        # Vendors are nodes 1, 2, 3, ... (node_id = dataframe_index)
+        for node_id, row in self.vendors_df.iterrows():
+            vendor_lat = row.get('vendor_latitude', None)
+            vendor_lon = row.get('vendor_longitude', None)
+            vendor_name = row.get('vendor Name', f'Vendor {node_id}')
+            vendor_city = row.get('Vendor City', 'Unknown')
+            vendor_plz = row.get('Vendor Postcode', 'N/A')
+            
+            if vendor_lat is not None and vendor_lon is not None:
+                coords[node_id] = (vendor_lat, vendor_lon)
+                node_info[node_id] = {
+                    'name': vendor_name,
+                    'city': vendor_city,
+                    'plz': vendor_plz,
+                    'type': 'vendor'
+                }
+                print(f'📍 Vendor {node_id} ({vendor_city}): {vendor_lat}, {vendor_lon}')
+        
+        print(f'📊 Total nodes with coordinates: {len(coords)} (Depot + {len(coords)-1} vendors)')
+        
+        if len(coords) < 2:
+            print('⚠️  Insufficient coordinate data for plotting')
+            return
+        
+        # Calculate center of map
+        all_lats = [coord[0] for coord in coords.values()]
+        all_lons = [coord[1] for coord in coords.values()]
+        center_lat = sum(all_lats) / len(all_lats)
+        center_lon = sum(all_lons) / len(all_lons)
+        
+        # Create folium map with modern styling
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=5,
+            tiles=None,
+            control_scale=True,
+            zoom_control=True,
+            scrollWheelZoom=True,
+            dragging=True,
+            prefer_canvas=True
+        )
+        
+        # Add different tile layers with aesthetic options (first one is default)
+        folium.TileLayer('OpenStreetMap', name='🗺️ Street Map', attr='OpenStreetMap').add_to(m)
+        folium.TileLayer('cartodbpositron', name='✨ Light Theme', attr='CartoDB', show=False).add_to(m)
+        folium.TileLayer('cartodbdark_matter', name='🌙 Dark Theme', attr='CartoDB', show=False).add_to(m)
+        folium.TileLayer('Stamen Terrain', name='🏔️ Terrain', attr='Stamen', show=False).add_to(m)
+        
+        # Define aesthetic colors for each vehicle (modern, slightly darker palette)
+        colors = ['#C0392B', '#2980B9', '#27AE60', '#8E44AD', '#D68910', '#16A085', '#CA6F1E', '#2C3E50']
+        
+        # Extract routes for each vehicle (excluding depot→vendor arcs) and calculate stats
+        routes = {}
+        route_stats = {}  # Store vehicle statistics
+        
+        for k in vehicles_used:
+            route_arcs = []
+            for arc in self.time_expanded_network:
+                i, ti, j, tj = arc[0][0], arc[0][1], arc[1][0], arc[1][1]
+                if connections[k][i][ti][j][tj] > 0.5:
+                    # Skip depot→vendor arcs (vehicles start at vendors, not depot)
+                    if not (i == 0 and j != 0):
+                        route_arcs.append((i, j))
+            
+            # Build route path by following arcs (starting from vendors)
+            if route_arcs:
+                # Create adjacency dict
+                arc_dict = {arc[0]: arc[1] for arc in route_arcs}
+                
+                # Find starting nodes (vendors that have no incoming arcs from other vendors)
+                destinations = set(arc[1] for arc in route_arcs)
+                origins = set(arc[0] for arc in route_arcs)
+                starting = list(origins - destinations) if origins - destinations else [arc[0] for arc in route_arcs if arc[0] != 0]
+                
+                # Trace route from each starting vendor
+                route_path = []
+                for start in starting:
+                    if start == 0:  # Skip depot as starting point
+                        continue
+                    current = start
+                    visited = set()
+                    path = [current]
+                    while current in arc_dict and current not in visited:
+                        visited.add(current)
+                        current = arc_dict[current]
+                        path.append(current)
+                    route_path.extend(path)
+                
+                # Remove duplicates while preserving order
+                seen = set()
+                route_path = [x for x in route_path if not (x in seen or seen.add(x))]
+                
+                routes[k] = route_path
+                
+                # Calculate vehicle statistics
+                total_cargo = 0
+                total_loading = 0
+                total_distance = 0
+                vendors_visited = []
+                
+                for i in range(len(route_path) - 1):
+                    node_from = route_path[i]
+                    node_to = route_path[i + 1]
+                    
+                    # Add cargo and loading from vendor nodes
+                    if node_from != 0:
+                        total_cargo += self.capacity_matrix[node_from]
+                        total_loading += self.loading_matrix[node_from]
+                        vendors_visited.append(node_from)
+                    
+                    # Add distance
+                    if node_from in range(len(self.distance_matrix)) and node_to in range(len(self.distance_matrix)):
+                        total_distance += self.distance_matrix[node_from][node_to]
+                
+                route_stats[k] = {
+                    'total_cargo': total_cargo,
+                    'total_loading': total_loading,
+                    'total_distance': total_distance,
+                    'num_vendors': len(set(vendors_visited)),
+                    'vendors': vendors_visited
+                }
+        
+        print('🗺️  Generating route visualization with actual road routing...')
+        
+        # Create vendor visit mapping (vendor_id -> {vehicle, step})
+        vendor_visits = {}
+        for vehicle_id, route in routes.items():
+            step_num = 0
+            for i, node in enumerate(route):
+                if node != 0:  # Not depot
+                    step_num += 1
+                    if node not in vendor_visits:
+                        vendor_visits[node] = {'vehicle': vehicle_id, 'step': step_num, 'total_steps': len([n for n in route if n != 0])}
+        
+        # Plot routes using OSRM for actual street routing
+        for vehicle_id, route in routes.items():
+            color = colors[vehicle_id % len(colors)]
+            
+            # Create feature group for this vehicle
+            vehicle_group = folium.FeatureGroup(name=f'🚚 Vehicle {vehicle_id}', show=True)
+            
+            # Plot route segments
+            for i in range(len(route) - 1):
+                node_from = route[i]
+                node_to = route[i + 1]
+                
+                # Calculate step number (1-indexed)
+                step_number = i + 1
+                total_steps = len(route) - 1
+                
+                # Get cargo and loading for this specific segment (from node_from)
+                segment_cargo = 0
+                segment_loading = 0
+                if node_from != 0:  # Not depot
+                    segment_cargo = self.capacity_matrix[node_from] if node_from < len(self.capacity_matrix) else 0
+                    segment_loading = self.loading_matrix[node_from] if node_from < len(self.loading_matrix) else 0
+                
+                if node_from in coords and node_to in coords:
+                    lat_from, lon_from = coords[node_from]
+                    lat_to, lon_to = coords[node_to]
+                    
+                    # Get actual street route using OSRM route API
+                    try:
+                        import requests
+                        
+                        # OSRM route API (provides actual route polyline)
+                        url = f"http://router.project-osrm.org/route/v1/driving/{lon_from},{lat_from};{lon_to},{lat_to}"
+                        params = {
+                            'overview': 'full',
+                            'geometries': 'geojson'
+                        }
+                        
+                        response = requests.get(url, params=params, timeout=10)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            
+                            if data['code'] == 'Ok' and len(data['routes']) > 0:
+                                # Extract route geometry
+                                route_geometry = data['routes'][0]['geometry']['coordinates']
+                                
+                                # Convert to lat,lon format (OSRM returns lon,lat)
+                                route_coords = [(coord[1], coord[0]) for coord in route_geometry]
+                                
+                                # Get distance and duration
+                                distance_km = data['routes'][0]['distance'] / 1000
+                                duration_hrs = data['routes'][0]['duration'] / 3600
+                                
+                                # Draw shadow/outline for depth effect
+                                folium.PolyLine(
+                                    route_coords,
+                                    color='#000000',
+                                    weight=6,
+                                    opacity=0.2
+                                ).add_to(vehicle_group)
+                                
+                                # Draw the actual route on the map with modern styling
+                                popup_html = f"""
+                                <div style="font-family: 'Segoe UI', Arial, sans-serif; min-width: 200px;">
+                                    <div style="background: linear-gradient(135deg, {color} 0%, {color}DD 100%); 
+                                                color: white; padding: 12px; border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;">
+                                        <h4 style="margin: 0; font-weight: 600;">🚚 Vehicle {vehicle_id}</h4>
+                                    </div>
+                                    <div style="padding: 5px 0;">
+                                        <p style="margin: 8px 0; font-size: 13px;"><b>From:</b> {node_info[node_from]["name"]}</p>
+                                        <p style="margin: 8px 0; font-size: 13px;"><b>To:</b> {node_info[node_to]["name"]}</p>
+                                        <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
+                                        <p style="margin: 8px 0; font-size: 13px;">📏 <b>Distance:</b> {distance_km:.1f} km</p>
+                                        <p style="margin: 8px 0; font-size: 13px;">⏱️ <b>Duration:</b> {duration_hrs:.1f} hrs</p>
+                                        <p style="margin: 8px 0; font-size: 12px; color: #666;">💨 Avg Speed: {distance_km/duration_hrs:.0f} km/h</p>
+                                    </div>
+                                </div>
+                                """
+                                # Enhanced tooltip with comprehensive route solution info
+                                avg_speed = distance_km / duration_hrs if duration_hrs > 0 else 0
+                                
+                                # Get vehicle statistics
+                                v_stats = route_stats.get(vehicle_id, {})
+                                total_cargo = v_stats.get('total_cargo', 0)
+                                total_loading = v_stats.get('total_loading', 0)
+                                total_distance = v_stats.get('total_distance', 0)
+                                num_vendors = v_stats.get('num_vendors', 0)
+                                
+                                # Calculate capacity utilization
+                                cargo_utilization = (total_cargo / self.max_capacity_kg[vehicle_id]) * 100 if vehicle_id < len(self.max_capacity_kg) else 0
+                                loading_utilization = (total_loading / self.max_ldms_vc[vehicle_id]) * 100 if vehicle_id < len(self.max_ldms_vc) else 0
+                                
+                                tooltip_html = f"""
+                                <div style="font-family: 'Segoe UI', Arial, sans-serif; min-width: 320px; max-width: 400px;">
+                                    <div style="background: linear-gradient(135deg, {color} 0%, {color}DD 100%); 
+                                                color: white; padding: 10px 15px; 
+                                                border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <b style="font-size: 15px;">🚚 Vehicle {vehicle_id}</b>
+                                            <span style="background: rgba(255,255,255,0.2); padding: 3px 8px; 
+                                                        border-radius: 12px; font-size: 11px;">Step {step_number}/{total_steps}</span>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 8px 0;">
+                                        <div style="background: #f8f9fa; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px;">
+                                            <p style="margin: 3px 0; font-size: 12px;">
+                                                <b>From:</b> {node_info[node_from]["name"]} ({node_info[node_from].get('city', 'N/A') if node_from != 0 else 'Seattle'})
+                                            </p>
+                                            <p style="margin: 3px 0; font-size: 12px;">
+                                                <b>To:</b> {node_info[node_to]["name"]} ({node_info[node_to].get('city', 'N/A') if node_to != 0 else 'Seattle'})
+                                            </p>
+                                        </div>
+                                        
+                                        <div style="font-size: 11px; line-height: 1.7;">
+                                            <div style="border-left: 3px solid {color}; padding-left: 8px; margin-bottom: 8px;">
+                                                <b>This Segment:</b>
+                                            </div>
+                                            <table style="width: 100%; margin-bottom: 10px;">
+                                                <tr>
+                                                    <td>📦 Cargo Pickup:</td>
+                                                    <td style="text-align: right;"><b>{segment_cargo:.0f} kg</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>📐 Loading Pickup:</td>
+                                                    <td style="text-align: right;"><b>{segment_loading:.1f} m³</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>📏 Distance:</td>
+                                                    <td style="text-align: right;"><b>{distance_km:.1f} km</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>⏱️ Duration:</td>
+                                                    <td style="text-align: right;"><b>{duration_hrs:.1f} hrs</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>💨 Avg Speed:</td>
+                                                    <td style="text-align: right;"><b>{avg_speed:.0f} km/h</b></td>
+                                                </tr>
+                                            </table>
+                                            
+                                            <div style="border-left: 3px solid {color}; padding-left: 8px; margin-bottom: 8px;">
+                                                <b>Complete Route Summary:</b>
+                                            </div>
+                                            <table style="width: 100%; margin-bottom: 8px;">
+                                                <tr>
+                                                    <td>🎯 Total Stops:</td>
+                                                    <td style="text-align: right;"><b>{num_vendors} vendor{'s' if num_vendors != 1 else ''}</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>🛣️ Total Distance:</td>
+                                                    <td style="text-align: right;"><b>{total_distance:.0f} km</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>📦 Total Cargo:</td>
+                                                    <td style="text-align: right;"><b>{total_cargo:.0f} kg</b></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>📐 Loading:</td>
+                                                    <td style="text-align: right;"><b>{total_loading:.1f} m³</b></td>
+                                                </tr>
+                                            </table>
+                                            
+                                            <div style="background: #e8f5e9; padding: 6px 8px; border-radius: 4px; margin-top: 8px;">
+                                                <div style="font-size: 10px; color: #2e7d32;">
+                                                    <b>Capacity Utilization:</b>
+                                                </div>
+                                                <div style="font-size: 10px; color: #555; margin-top: 3px;">
+                                                    Weight: {cargo_utilization:.1f}% • Volume: {loading_utilization:.1f}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="background: #fff3cd; padding: 6px 8px; border-radius: 4px; margin-top: 8px; border-left: 3px solid #ffc107;">
+                                            <p style="margin: 0; font-size: 10px; color: #856404;">
+                                                💡 <b>Click</b> the route for more detailed information
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                """
+                                folium.PolyLine(
+                                    route_coords,
+                                    color=color,
+                                    weight=5,
+                                    opacity=0.9,
+                                    popup=folium.Popup(popup_html, max_width=280),
+                                    tooltip=folium.Tooltip(tooltip_html, sticky=True),
+                                    smooth_factor=2.0
+                                ).add_to(vehicle_group)
+                            else:
+                                raise Exception("No route found")
+                        else:
+                            raise Exception(f"OSRM API error: {response.status_code}")
+                            
+                    except Exception as e:
+                        print(f'  ⚠️  Could not get route from OSRM for segment {node_from}→{node_to}: {e}')
+                        # Fallback to straight line with clear indication
+                        folium.PolyLine(
+                            [(lat_from, lon_from), (lat_to, lon_to)],
+                            color=color,
+                            weight=3,
+                            opacity=0.4,
+                            dash_array='10, 10',
+                            popup=f'Vehicle {vehicle_id}: {node_info[node_from]["name"]} → {node_info[node_to]["name"]} (Direct line - routing unavailable)',
+                            tooltip=f'V{vehicle_id}: Direct line'
+                        ).add_to(vehicle_group)
+            
+            vehicle_group.add_to(m)
+        
+        # Add markers for all nodes with clear differentiation
+        for node_id, (lat, lon) in coords.items():
+            info = node_info[node_id]
+            
+            if info['type'] == 'depot':
+                # Depot marker - modern design with gradient
+                popup_html = f"""
+                <div style="font-family: 'Segoe UI', Arial, sans-serif; width: 260px;">
+                    <div style="background: linear-gradient(135deg, #E74C3C 0%, #C0392B 100%); 
+                                color: white; padding: 20px; border-radius: 12px 12px 0 0; 
+                                margin: -15px -15px 15px -15px; text-align: center;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <div style="font-size: 36px; margin-bottom: 8px;">🏭</div>
+                        <h3 style="margin: 0; font-weight: 600; letter-spacing: 1px;">DISTRIBUTION CENTER</h3>
+                    </div>
+                    <div style="padding: 10px 5px;">
+                        <p style="margin: 10px 0; font-size: 14px; color: #555;">
+                            <b>📍 Location:</b> Seattle, WA
+                        </p>
+                        <p style="margin: 10px 0; font-size: 13px; color: #777;">
+                            Central hub for all delivery operations
+                        </p>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-top: 12px;">
+                            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                                ✅ All vehicles end routes here
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                """
+                folium.Marker(
+                    location=[lat, lon],
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip='<b style="font-size: 14px;">🏭 Distribution Center</b>',
+                    icon=folium.Icon(
+                        color='red', 
+                        icon='warehouse',
+                        prefix='fa',
+                        icon_color='white'
+                    )
+                ).add_to(m)
+                
+                # Add an elegant pulse circle around depot
+                folium.Circle(
+                    location=[lat, lon],
+                    radius=15000,
+                    color='#E74C3C',
+                    fill=True,
+                    fillColor='#E74C3C',
+                    fillOpacity=0.08,
+                    weight=2,
+                    opacity=0.4,
+                    popup='Distribution Center Service Area (15km radius)'
+                ).add_to(m)
+                
+            else:
+                # Vendor marker - modern card design
+                vendor_colors_hex = ['#2980B9', '#27AE60', '#8E44AD', '#D68910', '#16A085', '#CA6F1E']
+                vendor_color_hex = vendor_colors_hex[(node_id - 1) % len(vendor_colors_hex)]
+                
+                # Get cargo and loading for this vendor
+                vendor_cargo = self.capacity_matrix[node_id] if node_id < len(self.capacity_matrix) else 0
+                vendor_loading = self.loading_matrix[node_id] if node_id < len(self.loading_matrix) else 0
+                
+                # Get solution stage information
+                visit_info = vendor_visits.get(node_id, {})
+                assigned_vehicle = visit_info.get('vehicle', 'N/A')
+                visit_step = visit_info.get('step', 'N/A')
+                total_vendor_stops = visit_info.get('total_steps', 'N/A')
+                
+                popup_html = f"""
+                <div style="font-family: 'Segoe UI', Arial, sans-serif; width: 280px;">
+                    <div style="background: linear-gradient(135deg, {vendor_color_hex} 0%, {vendor_color_hex}DD 100%); 
+                                color: white; padding: 18px; border-radius: 12px 12px 0 0; 
+                                margin: -15px -15px 15px -15px;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 50%; 
+                                        font-size: 24px; width: 48px; height: 48px; display: flex; 
+                                        align-items: center; justify-content: center;">
+                                🏭
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; opacity: 0.9; font-weight: 500;">VENDOR {node_id}</div>
+                                <h4 style="margin: 4px 0 0 0; font-size: 16px; font-weight: 600;">{info['name']}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; 
+                                    padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                            <span style="font-size: 20px;">📍</span>
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #2c3e50;">{info['city']}</div>
+                                <div style="font-size: 12px; color: #7f8c8d;">ZIP: {info['plz']}</div>
+                            </div>
+                        </div>
+                        <div style="background: #e8f5e9; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px;">
+                            <div style="font-size: 11px; color: #2e7d32; font-weight: 600; margin-bottom: 6px;">
+                                📦 CARGO TO PICKUP
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 12px; color: #555; margin-bottom: 3px;">Weight:</div>
+                                    <div style="font-size: 16px; font-weight: 600; color: #2c3e50;">{vendor_cargo:,.0f} kg</div>
+                                </div>
+                                <div style="width: 1px; height: 30px; background: #ccc; margin: 0 10px;"></div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 12px; color: #555; margin-bottom: 3px;">Volume:</div>
+                                    <div style="font-size: 16px; font-weight: 600; color: #2c3e50;">{vendor_loading:,.1f} m³</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="background: linear-gradient(90deg, {vendor_color_hex}20 0%, {vendor_color_hex}05 100%); 
+                                    padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; border: 1px solid {vendor_color_hex}40;">
+                            <div style="font-size: 11px; color: {vendor_color_hex}; font-weight: 600; margin-bottom: 6px;">
+                                🚚 SOLUTION STAGE
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #2c3e50;">
+                                <div>
+                                    <span style="color: #777;">Assigned to:</span>
+                                    <b style="margin-left: 4px;">Vehicle {assigned_vehicle}</b>
+                                </div>
+                                <div style="background: {vendor_color_hex}; color: white; padding: 4px 10px; 
+                                            border-radius: 12px; font-weight: 600; font-size: 11px;">
+                                    Stop {visit_step}/{total_vendor_stops}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="background: linear-gradient(90deg, {vendor_color_hex}15 0%, transparent 100%); 
+                                    padding: 8px 12px; border-left: 3px solid {vendor_color_hex}; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 12px; color: #555;">
+                                <b>Pickup Location</b> • Active Route
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                """
+                
+                # Use different colors for vendors to distinguish them
+                vendor_colors = ['blue', 'green', 'purple', 'orange', 'cadetblue', 'darkgreen']
+                vendor_color = vendor_colors[(node_id - 1) % len(vendor_colors)]
+                
+                folium.Marker(
+                    location=[lat, lon],
+                    popup=folium.Popup(popup_html, max_width=320),
+                    tooltip=f"<b style='font-size: 13px;'>🏭 {info['name']}</b><br><span style='font-size: 11px;'>{info['city']}</span>",
+                    icon=folium.Icon(
+                        color=vendor_color,
+                        icon='industry',
+                        prefix='fa',
+                        icon_color='white'
+                    )
+                ).add_to(m)
+                
+                # Add small circle around vendor
+                folium.CircleMarker(
+                    location=[lat, lon],
+                    radius=12,
+                    color=vendor_color_hex,
+                    fill=True,
+                    fillColor=vendor_color_hex,
+                    fillOpacity=0.15,
+                    weight=2,
+                    opacity=0.4
+                ).add_to(m)
+        
+        # Add layer control with modern styling
+        folium.LayerControl(collapsed=False, position='topright').add_to(m)
+        
+        # Add fullscreen button
+        plugins.Fullscreen(position='topleft', title='Fullscreen', titleCancel='Exit Fullscreen').add_to(m)
+        
+        # Add mouse position plugin
+        plugins.MousePosition(
+            position='bottomleft',
+            separator=' | ',
+            prefix='Coordinates: ',
+            num_digits=4
+        ).add_to(m)
+        
+        # Add measure control
+        plugins.MeasureControl(
+            position='topleft',
+            primary_length_unit='kilometers',
+            secondary_length_unit='miles',
+            primary_area_unit='sqkilometers'
+        ).add_to(m)
+        
+        # Add mini map for overview
+        minimap = plugins.MiniMap(toggle_display=True, position='bottomright')
+        m.add_child(minimap)
+        
+        # Add title/legend as custom HTML
+        title_html = f'''
+        <div style="position: fixed; 
+                    top: 10px; 
+                    left: 50%; 
+                    transform: translateX(-50%);
+                    width: auto;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%);
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    padding: 15px 30px;
+                    z-index: 9999;
+                    border: 1px solid rgba(0,0,0,0.1);">
+            <h3 style="margin: 0; 
+                       color: #2c3e50; 
+                       font-family: 'Segoe UI', Arial, sans-serif;
+                       font-size: 20px;
+                       font-weight: 600;
+                       text-align: center;">
+                🚛 Optimized Delivery Routes
+            </h3>
+            <p style="margin: 5px 0 0 0; 
+                      color: #7f8c8d; 
+                      font-size: 13px;
+                      text-align: center;">
+                {len(vehicles_used)} Vehicle{'s' if len(vehicles_used) > 1 else ''} • {len(coords)-1} Vendor{'s' if len(coords)-1 > 1 else ''}
+            </p>
+        </div>
+        '''
+        m.get_root().html.add_child(folium.Element(title_html))
+        
+        # Fit bounds to show all markers
+        m.fit_bounds([[min(all_lats), min(all_lons)], [max(all_lats), max(all_lons)]])
+        
+        # Save map
+        if save_path is None:
+            save_path = 'routes_map.html'
+        
+        m.save(save_path)
+        print(f'🗺️  Interactive map saved to: {save_path}')
+        
+        # Open in browser if requested
+        if show_plot:
+            import webbrowser
+            import os
+            webbrowser.open('file://' + os.path.abspath(save_path))
+        
+        return m

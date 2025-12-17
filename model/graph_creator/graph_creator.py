@@ -11,7 +11,33 @@ import os
 import pandas as pd
 import math
 import warnings
-import openrouteservice as ors
+
+# Try to import Google Maps client
+try:
+    import googlemaps
+    GOOGLEMAPS_AVAILABLE = True
+except ImportError:
+    GOOGLEMAPS_AVAILABLE = False
+    googlemaps = None
+
+try:
+    import openrouteservice as ors
+except Exception:
+    # Provide a lightweight dummy ORS client for smoke tests when openrouteservice
+    # is not installed or network access is not available. This dummy returns
+    # zero distance/duration matrices so the rest of the pipeline can be exercised
+    # without external dependencies.
+    class _DummyORSClient:
+        def __init__(self, key=None):
+            self.key = key
+
+        def distance_matrix(self, locations, profile='driving-hgv', metrics=None, units='km', resolve_locations=False, validate=False):
+            n = len(locations)
+            distances = [[0 for _ in range(n)] for _ in range(n)]
+            durations = [[0 for _ in range(n)] for _ in range(n)]
+            return {'distances': distances, 'durations': durations}
+
+    ors = type('ors', (), {'Client': _DummyORSClient})
 
 from utils.project_utils import *
 
@@ -37,7 +63,21 @@ class Graph:
         self.max_weight = params['max_weight']
         self.max_ldms = params['max_ldms']
         self.plot_centered_coordinates = params['plot_centered_coordinates']      
-        self.client = ors.Client(key= '5b3ce3597851110001cf6248448674063e0d4ec38216e52a54d951b5') # Specify your personal API key
+        
+        # Initialize routing client (Google Maps preferred, ORS as fallback)
+        self.google_api_key = params.get('google_maps_api_key', None)
+        self.ors_api_key = params.get('ors_api_key', '5b3ce3597851110001cf6248448674063e0d4ec38216e52a54d951b5')
+        
+        if self.google_api_key and GOOGLEMAPS_AVAILABLE:
+            self.client = googlemaps.Client(key=self.google_api_key)
+            self.routing_provider = 'google'
+            log.info('Using Google Maps for distance/time calculations')
+        else:
+            self.client = ors.Client(key=self.ors_api_key)
+            self.routing_provider = 'ors'
+            if not self.google_api_key:
+                log.info('No Google Maps API key provided, using ORS/Haversine fallback')
+        
         self.distance_matrix = None
         self.time_distance_matrix = None
         self.disc_time_distance_matrix = None
@@ -113,7 +153,7 @@ class Graph:
 
 
         # recipient_extract
-        recipient_values = initial_dataset[['recipient longitude', 'recipient latitude']].apply(list, axis=1)
+        recipient_values = initial_dataset[['recipient_longitude', 'recipient_latitude']].apply(list, axis=1)
 
         # vendor_extrac
         if not isinstance(period, list):
@@ -127,17 +167,17 @@ class Graph:
         filter_geocoded = filter_dates(initial_dataset, period)       
  
         filter_geocoded.reset_index(drop=True, inplace=True)
-        df_coord = filter_geocoded[['vendor longitude', 'vendor latitude']]
+        df_coord = filter_geocoded[['vendor_longitude', 'vendor_latitude']]
         vendor_coordinates = df_coord.apply(list, axis=1)       # just coordinates 
 
-        vendors_df = filter_geocoded[['vendor Name', 'vendor longitude', 'vendor latitude', 'Calculated Loading Meters', 'Total Gross Weight',  'Requested Loading', 'Requested Delivery']]
+        vendors_df = filter_geocoded[['vendor Name', 'vendor_longitude', 'vendor_latitude', 'Calculated Loading Meters', 'Total Gross Weight',  'Requested Loading', 'Requested Delivery', 'Vendor City', 'Vendor Postcode']]
         vendors_df.index = vendors_df.index + 1
         vendors_df = vendors_df
         if len(vendors_df) !=0:
             print('Number of vendors extracted:', len(vendors_df))   # complete dataset
         
         # consolidation
-        complete_coordinates = recipient_values.head(1).append(vendor_coordinates)
+        complete_coordinates = pd.concat([recipient_values.head(1), vendor_coordinates], ignore_index=False)
         complete_coordinates = list(complete_coordinates)
         
         return complete_coordinates, vendors_df
@@ -145,10 +185,12 @@ class Graph:
 
     def create_network(self, complete_coordinates, vendors_df):
         """Creates Fix connection network.
-        Input: Nodes coordinates, source index, openrouteservice connection, setting to zero parameter.
+        Input: Nodes coordinates, source index, routing client, setting to zero parameter.
         Output: Distance and Time Travel Matrix
         """
-        self.distance_matrix, self.time_distance_matrix = info_matrix_definition(complete_coordinates, 0, 'horizontal', self.client)
+        self.distance_matrix, self.time_distance_matrix = info_matrix_definition(
+            complete_coordinates, 0, 'horizontal', self.client, self.routing_provider
+        )
         self.Nodes = cr_nodes(vendors_df)       
         self.length = len(self.distance_matrix)
         print('Distance & Time Distance Matrix created')
@@ -161,7 +203,6 @@ class Graph:
         
         print('Maximum hours allow to drive:', self.max_driving)
         print('New discretization constant allow to drive:', self.discretization_constant)
-
         self.disc_max_driving = self.max_driving/self.discretization_constant
         self.disc_loading = math.floor(self.loading/self.discretization_constant)
 
@@ -213,8 +254,8 @@ class Graph:
         max_date = max(vendors_df['Requested Loading']) 
         maximum_recipient = vendors_df['Requested Delivery']
 
-        min_dt = datetime.datetime.strptime(min_date, '%d.%m.%Y %H:%M')
-        max_dt = datetime.datetime.strptime(max_date, '%d.%m.%Y %H:%M')
+        min_dt = datetime.datetime.strptime(min_date, '%Y-%m-%d %H:%M:%S')
+        max_dt = datetime.datetime.strptime(max_date, '%Y-%m-%d %H:%M:%S')
         # should be 
         d0 = init_simulation_date
         d1 = min_dt - datetime.timedelta(days=earl_arv)
@@ -255,14 +296,14 @@ class Graph:
         # night_size = len(consecutive(non_driving_index)[0])
         night_size = max(list(map(len, consecutive(non_driving_index))))
 
-        days_req = pd.to_datetime(vendors_df['Requested Loading'], format= '%d.%m.%Y %H:%M').dt.day
+        days_req = pd.to_datetime(vendors_df['Requested Loading'], format= '%Y-%m-%d %H:%M:%S').dt.day
         if self.late_arv <= 6:
             e = {}
             l = {}
             for i in range(1,len(days_req)+1):
                 current_time = vendors_df['Requested Loading'][i]
 
-                current_time = datetime.datetime.strptime(current_time, '%d.%m.%Y %H:%M')
+                current_time = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
                 upper_time_window = current_time + datetime.timedelta(hours=self.earl_arv)
                 lower_time_window = current_time - datetime.timedelta(hours=self.late_arv)
 
@@ -386,7 +427,12 @@ class Graph:
         print('Minimum arrival time in the time-expanded matrix is on', date_time_network_min )
         print('Maximum arrival time in the time-expanded matrix is on', date_time_network_max )
 
-        return T_ex, Tau_index, time_network_index
+        # Convert NumPy types to native Python types for cleaner output
+        T_ex_clean = [[[int(arc[0][0]), int(arc[0][1])], [int(arc[1][0]), int(arc[1][1])]] for arc in T_ex]
+        Tau_index_clean = [int(x) for x in Tau_index]
+        time_network_index_clean = [int(x) for x in time_network_index]
+
+        return T_ex_clean, Tau_index_clean, time_network_index_clean
 
     def shift_time(self, index_to_shift, vendors_df, init_simulation_date, end_simulation_date):
         # shift index to the overall time index matrix

@@ -9,13 +9,15 @@ import datetime
 import pandas as pd
 import numpy as np
 import logging as log
-import coloredlogs
+try:
+    import coloredlogs
+except Exception:
+    coloredlogs = None
 import math
 import json
 import os
 import pycountry
 
-from IPython.display import display
 
 
 ################################################################################################################################################
@@ -23,15 +25,24 @@ from IPython.display import display
 ################################################################################################################################################
 # Create a logger object.
 logger = log.getLogger(__name__)
-# Create a filehandler object
+# Create a filehandler object for debugging logs
 fh = log.FileHandler('spam.log')
 fh.setLevel(log.DEBUG)
-# Create a ColoredFormatter to use as formatter for the FileHandler
-formatter = coloredlogs.ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
-# Install the coloredlogs module on the root logger
-coloredlogs.install(level='DEBUG')
+# Use coloredlogs if available, otherwise fall back to standard logging.Formatter
+if coloredlogs is not None:
+    formatter = coloredlogs.ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    try:
+        fh.setFormatter(formatter)
+    except Exception:
+        fh.setFormatter(log.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(fh)
+    try:
+        coloredlogs.install(level='DEBUG')
+    except Exception:
+        pass
+else:
+    fh.setFormatter(log.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(fh)
 
 
 ################################################################################################################################################
@@ -243,7 +254,8 @@ def split_values(euro_palett, current_ldm, current_weight, minimum_ldm, maximum_
 # Import parameters ------------------------------------
 ################################################################################################################################################
 def import_parameters(parameters_path):
-    network_params_file_name = 'graph_params.txt'
+    # Historically the project used 'graph_params.txt' — current config files are named 'network_params.txt'
+    network_params_file_name = 'network_params.txt'
     model_params_file_name = 'model_params.txt'
     simulation_params_file_name = 'simulation_params.txt'
 
@@ -271,17 +283,151 @@ def SolVal(x):
 def ObjVal(x):
     return x.Objective().Value()
 
-def info_matrix_definition(coordinates, source_node, shape, client):
-    info_mtrx = client.distance_matrix(
-                                            locations=coordinates,
-                                            profile='driving-hgv',
-                                            metrics= ['distance', 'duration'],
-                                            units = 'km',
-                                            resolve_locations=True,
-                                            validate=False
-                                            )
-    distance_mtrx = info_mtrx['distances']
-    time_mtrx = info_mtrx['durations']
+def haversine_distance(lon1, lat1, lon2, lat2):
+    """Calculate the great circle distance between two points on Earth in kilometers."""
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
+    
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    # Radius of earth in kilometers
+    r = 6371
+    return c * r
+
+def calculate_osrm_matrix(coordinates):
+    """Calculate distance/time matrix using free OSRM service (no API key needed).
+    
+    Returns:
+        distance_matrix: distances in km
+        time_matrix: durations in SECONDS (not hours - will be converted later)
+    """
+    import requests
+    
+    # OSRM expects lon,lat format
+    coords_str = ';'.join([f"{coord[0]},{coord[1]}" for coord in coordinates])
+    
+    # Use OSRM public demo server - completely free!
+    url = f"http://router.project-osrm.org/table/v1/driving/{coords_str}"
+    params = {
+        'annotations': 'distance,duration'
+    }
+    
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+    
+    data = response.json()
+    
+    if data['code'] != 'Ok':
+        raise Exception(f"OSRM error: {data.get('message', 'Unknown error')}")
+    
+    # Convert meters to km, but keep durations in SECONDS (discret_time_matrix will convert to hours)
+    distance_matrix = [[dist / 1000.0 for dist in row] for row in data['distances']]
+    time_matrix = [[dur for dur in row] for row in data['durations']]  # Keep in seconds!
+    
+    return distance_matrix, time_matrix
+
+def info_matrix_definition(coordinates, source_node, shape, client, provider='ors'):
+    """Calculate distance and time matrices using OSRM (free), Google Maps, ORS, or Haversine fallback.
+    
+    Args:
+        coordinates: List of [longitude, latitude] pairs
+        source_node: Index of source node (depot)
+        shape: 'horizontal' or 'vertical' for zeroing depot row/column
+        client: Routing API client (Google Maps or ORS)
+        provider: 'google', 'ors', or 'osrm'
+    """
+    # Try OSRM first (completely free, no API key needed)
+    try:
+        print('🌐 Calculating distances using OSRM (free, real road distances)...')
+        log.info('Calculating distances using OSRM (free, real road distances)...')
+        distance_mtrx, time_mtrx = calculate_osrm_matrix(coordinates)
+        print('✅ OSRM calculation completed successfully')
+        log.info(f'OSRM calculation completed successfully')
+    except Exception as e:
+        log.info(f'OSRM failed ({str(e)}), trying alternative providers...')
+        
+        # Fallback to Google Maps or ORS
+        try:
+            if provider == 'google':
+                # Use Google Maps Distance Matrix API
+                log.info('Calculating distances using Google Maps API...')
+                n = len(coordinates)
+                distance_mtrx = [[0.0 for _ in range(n)] for _ in range(n)]
+                time_mtrx = [[0.0 for _ in range(n)] for _ in range(n)]
+                
+                # Convert coordinates to lat,lng format for Google Maps
+                origins = [f"{coord[1]},{coord[0]}" for coord in coordinates]  # lat,lng format
+                
+                # Google Maps API has limits, so batch requests if needed
+                # Maximum 25 origins × 25 destinations per request
+                batch_size = 25
+                
+                for i in range(0, n, batch_size):
+                    for j in range(0, n, batch_size):
+                        batch_origins = origins[i:min(i+batch_size, n)]
+                        batch_destinations = origins[j:min(j+batch_size, n)]
+                        
+                        result = client.distance_matrix(
+                            origins=batch_origins,
+                            destinations=batch_destinations,
+                            mode='driving',
+                            units='metric'
+                        )
+                        
+                        # Parse results
+                        for row_idx, row in enumerate(result['rows']):
+                            for col_idx, element in enumerate(row['elements']):
+                                global_row = i + row_idx
+                                global_col = j + col_idx
+                                
+                                if element['status'] == 'OK':
+                                    # Distance in meters, convert to km
+                                    distance_mtrx[global_row][global_col] = element['distance']['value'] / 1000.0
+                                    # Duration in seconds, convert to hours
+                                    time_mtrx[global_row][global_col] = element['duration']['value'] / 3600.0
+                
+                log.info('Google Maps distance calculation completed')
+                
+            else:
+                # Try using ORS client for real routing distances
+                info_mtrx = client.distance_matrix(
+                                                        locations=coordinates,
+                                                        profile='driving-hgv',
+                                                        metrics= ['distance', 'duration'],
+                                                        units = 'km',
+                                                        resolve_locations=True,
+                                                        validate=False
+                                                        )
+                distance_mtrx = info_mtrx['distances']
+                time_mtrx = info_mtrx['durations']
+            
+                # Check if we got real data or dummy zeros
+                total_distance = sum(sum(row) for row in distance_mtrx)
+                if total_distance == 0 and len(coordinates) > 1:
+                    # Dummy client returned zeros, fall back to Haversine
+                    raise ValueError("ORS returned zero distances, using Haversine fallback")
+        except Exception as e:
+            # Fall back to Haversine distance calculation
+            log.info(f'Using Haversine distance calculation (straight-line distances): {str(e)}')
+            n = len(coordinates)
+            distance_mtrx = [[0.0 for _ in range(n)] for _ in range(n)]
+            
+            for i in range(n):
+                for j in range(n):
+                    if i != j:
+                        # coordinates format: [longitude, latitude]
+                        dist = haversine_distance(
+                            coordinates[i][0], coordinates[i][1],
+                            coordinates[j][0], coordinates[j][1]
+                        )
+                        distance_mtrx[i][j] = dist
+            
+            # Estimate time based on distance (assume average speed of 60 km/h for trucks)
+            time_mtrx = [[dist / 60.0 for dist in row] for row in distance_mtrx]
     
     if shape == 'horizontal':
         # Setting first row to zero
@@ -352,17 +498,20 @@ def filter_dates(df, period):
     init_p = datetime.datetime.strptime(period[0], '%Y-%m-%d %H:%M:%S')
     endg_p = datetime.datetime.strptime(period[1], '%Y-%m-%d %H:%M:%S')
     
-    df_f['temp_date'] = pd.to_datetime(df_f['Requested Loading'], format='%d.%m.%Y %H:%M')
-    df_f=df_f[ (df_f['temp_date'] >= init_p) &  (df_f['temp_date'] <= endg_p) ]
+    # Be permissive when parsing dates: accept day-first formats and coerce errors
+    df_f['temp_date'] = pd.to_datetime(df_f['Requested Loading'], errors='coerce')
+    df_f = df_f[(df_f['temp_date'] >= init_p) & (df_f['temp_date'] <= endg_p)]
 
 
     # if len(df_f) == 0:       
     #     raise ValueError('---------------------------- No service needed on this period. Please try later.')
             
+    # Normalize 'Requested Loading' to '%Y-%m-%d %H:%M:%S' format expected by time network
+    df_f['Requested Loading'] = df_f['temp_date'].dt.strftime('%Y-%m-%d %H:%M:%S')
     df_f.drop('temp_date', axis=1, inplace=True)
     df_f.sort_values(by=['Requested Loading'],inplace=True)   
     df_f.reset_index(drop=True, inplace=True)
-    df_time = pd.to_datetime(df_f['Requested Loading'])
+    df_time = pd.to_datetime(df_f['Requested Loading'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
     
     # Week days -----------------------------------------------------------------
     nur_dates = df_time.dt.date.drop_duplicates()
@@ -388,7 +537,12 @@ def discret_time_matrix(time_matrix, discretization_constant):
     time_distance_matrix = time_matrix/(3600) # convert to hours
     
     non_zero_time_matrix = time_distance_matrix[time_distance_matrix != 0]
-    current_discretization_constant = max( math.floor(np.min(non_zero_time_matrix)+1), discretization_constant)
+    
+    # Use the provided discretization_constant
+    # The old logic used max(floor(min_time+1), discretization_constant) which made it too coarse
+    # For example, with min_time=15.6 hrs, it would use 16 instead of the intended 4
+    current_discretization_constant = discretization_constant
+    
     # current_discretization_constant = min(10, current_discretization_constant)
     time_distance_matrix = np.ceil(time_distance_matrix/current_discretization_constant) 
     return time_distance_matrix.astype(int), current_discretization_constant
@@ -399,7 +553,7 @@ def date_index(discretization_constant, e_day, e_hour, min_day, tour_days, Tau_h
     #    raise ValueError('check')
 
     if len(maximum) != 0:
-        max_day = datetime.datetime.strptime(maximum, '%d.%m.%Y %H:%M')
+        max_day = datetime.datetime.strptime(maximum, '%Y-%m-%d %H:%M:%S')
     else:
         max_day = min_day + datetime.timedelta(days = tour_days + 1)
         max_day = max_day
@@ -541,7 +695,8 @@ def next_index(route, current_index):
             break
     return route[alpha][2], route[alpha][3] 
 
-def inv_date_index(index_to_check, discretization_constant, min_day, Tau_hours, time_network=[]):
+def inv_date_index_v2(index_to_check, discretization_constant, min_day, Tau_hours, time_network=[]):
+    """Alternative version of inv_date_index - kept for backward compatibility."""
     if len(time_network) != len(Tau_hours):
         last_value = Tau_hours[len(Tau_hours)-1]
         extra = len(time_network)-len(Tau_hours)
@@ -555,6 +710,9 @@ def inv_date_index(index_to_check, discretization_constant, min_day, Tau_hours, 
 
     output_value = Tau_hours[index_to_check]    
     str_hour = str(datetime.timedelta(hours=int(output_value))).rsplit(':', 1)[0]
-    str_complete = 'day ' + str(min_day + val_day) + ' at ' + str_hour
+    
+    # Calculate the actual date by adding val_day days to min_day
+    actual_date = min_day + datetime.timedelta(days=val_day)
+    str_complete = 'day ' + str(actual_date) + ' at ' + str_hour
 
     return str_complete
