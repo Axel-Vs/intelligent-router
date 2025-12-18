@@ -610,15 +610,28 @@
             display: none;
             background: none;
             border: none;
-            font-size: 24px;
             color: var(--text-primary);
             cursor: pointer;
             padding: 8px;
+            line-height: 0;
         }
 
         .mobile-menu-toggle:hover {
             background: var(--secondary-bg);
             border-radius: 6px;
+        }
+
+        /* Screen reader only text */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
         }
 
         /* Mobile Responsive Styles */
@@ -773,7 +786,7 @@
 
             .section-header,
             .section-title {
-                font-size: 10px;
+                font-size: 12px;
             }
         }
 
@@ -797,8 +810,13 @@
     <div class="platform-container">
         <!-- Top Navigation -->
         <div class="top-nav">
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
-                ☰
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu" aria-expanded="false">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+                <span class="sr-only">Menu</span>
             </button>
             <div class="platform-title">
                 <h1>Intelligent Router</h1>
@@ -963,10 +981,16 @@
         function toggleMobileMenu() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.querySelector('.mobile-overlay');
+            const menuButton = document.querySelector('.mobile-menu-toggle');
             
             if (sidebar && overlay) {
-                sidebar.classList.toggle('open');
+                const isOpen = sidebar.classList.toggle('open');
                 overlay.classList.toggle('show');
+                
+                // Update aria-expanded for accessibility
+                if (menuButton) {
+                    menuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                }
             }
         }
 
