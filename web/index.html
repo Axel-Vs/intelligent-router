@@ -603,12 +603,202 @@
         input[type="file"] {
             display: none;
         }
+
+        /* Mobile Menu Toggle */
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: var(--secondary-bg);
+            border-radius: 6px;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            /* Top Navigation */
+            .top-nav {
+                padding: 0 16px;
+            }
+
+            .platform-title h1 {
+                font-size: 20px;
+            }
+
+            .platform-badge {
+                font-size: 9px;
+                padding: 3px 8px;
+            }
+
+            .nav-actions {
+                display: none;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+
+            /* Main Layout - Stack vertically on mobile */
+            .main-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            /* Sidebar - Full width and collapsible */
+            .sidebar {
+                position: fixed;
+                top: 60px;
+                left: -100%;
+                width: 80%;
+                max-width: 320px;
+                height: calc(100vh - 60px);
+                z-index: 1000;
+                transition: left 0.3s ease;
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            /* Mobile overlay */
+            .mobile-overlay {
+                display: none;
+                position: fixed;
+                top: 60px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+            }
+
+            .mobile-overlay.show {
+                display: block;
+            }
+
+            /* Content area adjustments */
+            .content-area {
+                width: 100%;
+                padding: 0;
+            }
+
+            /* Map and Stats - Stack vertically */
+            .map-stats-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-column {
+                border-right: none;
+                border-bottom: 1px solid var(--grid-line);
+            }
+
+            /* Map container - Adjust height for mobile */
+            .map-container {
+                height: 400px;
+                border-radius: 8px;
+            }
+
+            /* Parameters Grid - Single column on mobile */
+            .params-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            /* Route Grid - Single column */
+            .route-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Buttons - Full width with better touch targets */
+            .btn {
+                padding: 16px 24px;
+                font-size: 14px;
+            }
+
+            /* Content sections - Reduce padding */
+            .content-section {
+                padding: 16px;
+            }
+
+            .sidebar-section {
+                padding: 16px;
+            }
+
+            .map-column,
+            .stats-column {
+                padding: 16px;
+            }
+        }
+
+        /* Small mobile devices */
+        @media (max-width: 480px) {
+            .platform-title h1 {
+                font-size: 18px;
+            }
+
+            .platform-badge {
+                display: none;
+            }
+
+            .top-nav {
+                padding: 0 12px;
+            }
+
+            .sidebar {
+                width: 90%;
+            }
+
+            .map-container {
+                height: 300px;
+            }
+
+            .content-section,
+            .sidebar-section,
+            .map-column,
+            .stats-column {
+                padding: 12px;
+            }
+
+            .stat-value {
+                font-size: 14px;
+            }
+
+            .section-header,
+            .section-title {
+                font-size: 10px;
+            }
+        }
+
+        /* Landscape tablets and small desktops */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 280px 1fr;
+            }
+
+            .sidebar {
+                width: 280px;
+            }
+
+            .params-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="platform-container">
         <!-- Top Navigation -->
         <div class="top-nav">
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+                ☰
+            </button>
             <div class="platform-title">
                 <h1>Intelligent Router</h1>
                 <span class="platform-badge">ENTERPRISE</span>
@@ -622,6 +812,9 @@
 
         <!-- Main Layout -->
         <div class="main-layout">
+            <!-- Mobile Overlay -->
+            <div class="mobile-overlay" onclick="toggleMobileMenu()"></div>
+            
             <!-- Sidebar -->
             <div class="sidebar">
                 <!-- Data Upload Section -->
@@ -1073,6 +1266,32 @@
 
         // Initial render
         renderVendorList();
+
+        // Mobile menu toggle functionality
+        function toggleMobileMenu() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.mobile-overlay');
+            
+            if (sidebar && overlay) {
+                sidebar.classList.toggle('open');
+                overlay.classList.toggle('show');
+            }
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            // Close menu when window is resized to desktop size
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const overlay = document.querySelector('.mobile-overlay');
+                    if (sidebar && overlay) {
+                        sidebar.classList.remove('open');
+                        overlay.classList.remove('show');
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>
