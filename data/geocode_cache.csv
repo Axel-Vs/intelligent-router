@@ -40,3 +40,7 @@ address,lat,lon
 "456 Broadway, 10007, New York, United States",40.7205215,-74.0005756
 "789 Water St, B3J1S9, Halifax, Canada",44.6500351,-63.5735893
 "123 Atlantic Ave, 2110, Boston, United States",42.3619633,-71.0511669
+"234 Forge St.         ,  New York      , 34567,  United States",43.6997723,-75.0013664
+"567 Avenida Revolución,  Tijuana       , 22000,  Mexico",32.5281382,-117.0361366
+"123 Atlantic Ave.     ,  Boston        , 2110,  United States",42.3619633,-71.0511669
+"789 Water St.         ,  Halifax       , B3J1S9,  Canada",44.6500351,-63.5735893

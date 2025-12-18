@@ -321,7 +321,8 @@ class Graph:
 
                 if lower_time_window.hour < self.vendor_start_hr:
                     diff_hours = self.vendor_start_hr - lower_time_window.hour
-                    lower_time_window = datetime.datetime(current_time.year, current_time.month, current_time.day -1, self.pickup_end_hr - diff_hours, 0, 0)
+                    prev_day = current_time - datetime.timedelta(days=1)
+                    lower_time_window = datetime.datetime(prev_day.year, prev_day.month, prev_day.day, self.pickup_end_hr - diff_hours, 0, 0)
 
                 e[i] = [lower_time_window.day, int(lower_time_window.strftime("%H") )]
                 l[i] = [upper_time_window.day, int(upper_time_window.strftime("%H") )]
@@ -334,15 +335,12 @@ class Graph:
                 current_time = vendors_df['Requested Loading'][i]
                 current_time = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
             
-                lower_date = current_time - datetime.timedelta(hours=self.earl_arv)
-                upper_date = current_time + datetime.timedelta(hours=self.late_arv)
+                lower_datetime = current_time - datetime.timedelta(hours=self.earl_arv)
+                upper_datetime = current_time + datetime.timedelta(hours=self.late_arv)
                 
-                lower_date = int(lower_date.strftime("%d"))
-                upper_date = int(upper_date.strftime("%d"))
-                arrv_time = int(current_time.strftime("%H") )
-                
-                e[i] = [lower_date, arrv_time]  # one day before allow
-                l[i] = [upper_date, arrv_time ] # one day after allow
+                # Pass full datetime instead of just day number to avoid ambiguity in multi-month tours
+                e[i] = [lower_datetime, int(current_time.strftime("%H"))]  # one day before allow
+                l[i] = [upper_datetime, int(current_time.strftime("%H"))] # one day after allow
         else:
             raise ValueError('Arrival time not supported')
 

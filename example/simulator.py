@@ -152,14 +152,37 @@ periods = periods_generator(simulation_params["Simulation_periods"],
                             network_params['vendor_start_hr'],
                             network_params['pickup_end_hr'])
 
-# If dataset has a 'Requested Loading Date' we can create a single period that contains all records
-if df_raw.shape[0] > 0 and 'Requested Loading Date' in df_raw.columns:
+# Determine period spanning from earliest loading date to latest delivery date
+if df_raw.shape[0] > 0:
     try:
-        min_dt = pd.to_datetime(df_raw['Requested Loading Date'], errors='coerce').min()
-        max_dt = pd.to_datetime(df_raw['Requested Loading Date'], errors='coerce').max()
-        if pd.notna(min_dt) and pd.notna(max_dt):
+        min_dt = None
+        max_dt = None
+        
+        # Get earliest loading date and latest delivery date from CSV
+        if 'Requested Loading Date' in df_raw.columns:
+            loading_dates = pd.to_datetime(df_raw['Requested Loading Date'], errors='coerce').dropna()
+            if len(loading_dates) > 0:
+                min_dt = loading_dates.min()
+                max_dt = loading_dates.max()
+        
+        if 'Requested Delivery Date' in df_raw.columns:
+            delivery_dates = pd.to_datetime(df_raw['Requested Delivery Date'], errors='coerce').dropna()
+            if len(delivery_dates) > 0:
+                if min_dt is None:
+                    min_dt = delivery_dates.min()
+                else:
+                    min_dt = min(min_dt, delivery_dates.min())
+                
+                if max_dt is None:
+                    max_dt = delivery_dates.max()
+                else:
+                    max_dt = max(max_dt, delivery_dates.max())
+        
+        if min_dt is not None and max_dt is not None and pd.notna(min_dt) and pd.notna(max_dt):
             periods = [[min_dt.strftime('%Y-%m-%d %H:%M:%S'), max_dt.strftime('%Y-%m-%d %H:%M:%S')]]
-    except Exception:
+            print(f"📅 Tour period: {min_dt} to {max_dt}")
+    except Exception as e:
+        print(f"⚠️ Error calculating period: {e}")
         pass
 
 # Iterate through different weight values (kept small for a quick smoke run)

@@ -579,7 +579,28 @@ def date_index(discretization_constant, e_day, e_hour, min_day, tour_days, Tau_h
             
         prev_hour = current_hour
 
-    index_tour_day = np.where(np.array(total_tour_days.day) == e_day)[0][0]
+    # Handle both datetime objects and integer day numbers for backward compatibility
+    if isinstance(e_day, (datetime.datetime, pd.Timestamp)):
+        # e_day is a full datetime - find exact date match
+        e_date = pd.Timestamp(e_day).normalize()  # Remove time component for comparison
+        tour_dates = pd.DatetimeIndex(total_tour_days).normalize()
+        matching_dates = np.where(tour_dates == e_date)[0]
+        if len(matching_dates) == 0:
+            print(f"⚠️ DEBUG: Date {e_date.date()} not found in tour period {total_tour_days[0].date()} to {total_tour_days[-1].date()}")
+            print(f"⚠️ DEBUG: e_day type: {type(e_day)}, value: {e_day}")
+            print(f"⚠️ DEBUG: Tour days count: {len(total_tour_days)}")
+            print(f"⚠️ DEBUG: First 3 tour days: {total_tour_days[:3]}")
+            print(f"⚠️ DEBUG: Last 3 tour days: {total_tour_days[-3:]}")
+            raise IndexError(f"Date {e_date.date()} not found in tour period {total_tour_days[0].date()} to {total_tour_days[-1].date()}")
+        index_tour_day = matching_dates[0]
+    else:
+        # e_day is an integer day number - use old logic (may be ambiguous for multi-month tours)
+        print(f"⚠️ DEBUG: Using old logic with day number: {e_day} (type: {type(e_day)})")
+        matching_indices = np.where(np.array(total_tour_days.day) == e_day)[0]
+        if len(matching_indices) == 0:
+            print(f"⚠️ DEBUG: Day {e_day} not found in tour days")
+            print(f"⚠️ DEBUG: Available days: {sorted(set(total_tour_days.day))}")
+        index_tour_day = matching_indices[0]
     
     indx_to_consider= np.arange(counter_tau[index_tour_day]*index_tour_day, 
                                 counter_tau[index_tour_day]*index_tour_day + counter_tau[val_day], 

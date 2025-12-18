@@ -1027,8 +1027,8 @@ class DeliveryOptimizer:
             prefer_canvas=True
         )
         
-        # Fit map to show all points with padding
-        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=[50, 50])
+        # Fit map to show all points with extra padding for better overview
+        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=[100, 100])
         
         # Add different tile layers with aesthetic options (first one is default)
         folium.TileLayer('OpenStreetMap', name='🗺️ Street Map', attr='OpenStreetMap').add_to(m)
@@ -1343,18 +1343,18 @@ class DeliveryOptimizer:
                                                 {vendor_list_html}
                                             </ul>
                                             
-                                            <div style="background: #e8f5e9; padding: 6px 8px; border-radius: 4px; margin-top: 8px;">
-                                                <div style="font-size: 10px; color: #2e7d32;">
-                                                    <b>Capacity Utilization:</b>
+                                            <div style="background: #F8F7F4; padding: 8px 10px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #5A7A65;">
+                                                <div style="font-size: 10px; color: #5A7A65; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                    Capacity Utilization
                                                 </div>
-                                                <div style="font-size: 10px; color: #555; margin-top: 3px;">
+                                                <div style="font-size: 11px; color: #5C5B56; margin-top: 4px;">
                                                     Weight: {cargo_utilization:.1f}% • Volume: {loading_utilization:.1f}%
                                                 </div>
                                             </div>
                                         </div>
                                         
-                                        <div style="background: #fff3cd; padding: 6px 8px; border-radius: 4px; margin-top: 8px; border-left: 3px solid #ffc107;">
-                                            <p style="margin: 0; font-size: 10px; color: #856404;">
+                                        <div style="background: rgba(179, 154, 124, 0.08); padding: 8px 10px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #B39A7C;">
+                                            <p style="margin: 0; font-size: 10px; color: #5C5B56;">
                                                 💡 <b>Click</b> the route for more detailed information
                                             </p>
                                         </div>
@@ -1413,23 +1413,22 @@ class DeliveryOptimizer:
             if info['type'] == 'depot':
                 # Depot marker - modern design with gradient
                 popup_html = f"""
-                <div style="font-family: 'Segoe UI', Arial, sans-serif; width: 260px;">
-                    <div style="background: linear-gradient(135deg, #E74C3C 0%, #C0392B 100%); 
-                                color: white; padding: 20px; border-radius: 12px 12px 0 0; 
-                                margin: -15px -15px 15px -15px; text-align: center;
-                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        <div style="font-size: 36px; margin-bottom: 8px;">🏭</div>
-                        <h3 style="margin: 0; font-weight: 600; letter-spacing: 1px;">DISTRIBUTION CENTER</h3>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; width: 280px;">
+                    <div style="background: #000000; 
+                                color: white; padding: 24px; border-radius: 12px 12px 0 0; 
+                                margin: -15px -15px 15px -15px; text-align: center;">
+                        <div style="font-size: 32px; margin-bottom: 10px;">🏭</div>
+                        <h3 style="margin: 0; font-weight: 600; letter-spacing: 0.5px; font-size: 15px;">DISTRIBUTION CENTER</h3>
                     </div>
-                    <div style="padding: 10px 5px;">
-                        <p style="margin: 10px 0; font-size: 14px; color: #555;">
-                            <b>📍 Location:</b> Seattle, WA
+                    <div style="padding: 12px 8px;">
+                        <p style="margin: 12px 0; font-size: 14px; color: #2C2B28; font-weight: 500;">
+                            <b style="color: #5C5B56;">📍 Location:</b> Seattle, WA
                         </p>
-                        <p style="margin: 10px 0; font-size: 13px; color: #777;">
+                        <p style="margin: 12px 0; font-size: 13px; color: #5C5B56; line-height: 1.6;">
                             Central hub for all delivery operations
                         </p>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-top: 12px;">
-                            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                        <div style="background: #F8F7F4; padding: 12px; border-radius: 8px; margin-top: 14px; border-left: 3px solid #000000;">
+                            <p style="margin: 0; font-size: 12px; color: #5C5B56;">
                                 ✅ All vehicles end routes here
                             </p>
                         </div>
@@ -1478,24 +1477,23 @@ class DeliveryOptimizer:
                 total_vendor_stops = visit_info.get('total_steps', 'N/A')
                 
                 popup_html = f"""
-                <div style="font-family: 'Segoe UI', Arial, sans-serif; width: 280px;">
-                    <div style="background: linear-gradient(135deg, {vendor_color_hex} 0%, {vendor_color_hex}DD 100%); 
-                                color: white; padding: 18px; border-radius: 12px 12px 0 0; 
-                                margin: -15px -15px 15px -15px;
-                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 50%; 
-                                        font-size: 24px; width: 48px; height: 48px; display: flex; 
-                                        align-items: center; justify-content: center;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; width: 300px;">
+                    <div style="background: {vendor_color_hex}; 
+                                color: white; padding: 20px; border-radius: 12px 12px 0 0; 
+                                margin: -15px -15px 15px -15px;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="background: rgba(255,255,255,0.15); padding: 11px; border-radius: 10px; 
+                                        font-size: 22px; width: 48px; height: 48px; display: flex; 
+                                        align-items: center; justify-content: center; backdrop-filter: blur(4px);">
                                 🏭
                             </div>
                             <div>
-                                <div style="font-size: 12px; opacity: 0.9; font-weight: 500;">VENDOR {node_id}</div>
-                                <h4 style="margin: 4px 0 0 0; font-size: 16px; font-weight: 600;">{info['name']}</h4>
+                                <div style="font-size: 11px; opacity: 0.85; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">VENDOR {node_id}</div>
+                                <h4 style="margin: 5px 0 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">{info['name']}</h4>
                             </div>
                         </div>
                     </div>
-                    <div style="padding: 15px;">
+                    <div style="padding: 16px;">
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; 
                                     padding: 10px; background: #f8f9fa; border-radius: 8px;">
                             <span style="font-size: 20px;">📍</span>
@@ -1504,19 +1502,19 @@ class DeliveryOptimizer:
                                 <div style="font-size: 12px; color: #7f8c8d;">ZIP: {info['plz']}</div>
                             </div>
                         </div>
-                        <div style="background: #e8f5e9; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px;">
-                            <div style="font-size: 11px; color: #2e7d32; font-weight: 600; margin-bottom: 6px;">
+                        <div style="background: #F8F7F4; padding: 12px 14px; border-radius: 10px; margin-bottom: 14px; border: 1px solid #E8E6E0;">
+                            <div style="font-size: 11px; color: #5A7A65; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
                                 📦 CARGO TO PICKUP
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div style="flex: 1;">
-                                    <div style="font-size: 12px; color: #555; margin-bottom: 3px;">Weight:</div>
-                                    <div style="font-size: 16px; font-weight: 600; color: #2c3e50;">{vendor_cargo:,.0f} kg</div>
+                                    <div style="font-size: 12px; color: #9A9892; margin-bottom: 4px; font-weight: 500;">Weight:</div>
+                                    <div style="font-size: 17px; font-weight: 600; color: #2C2B28;">{vendor_cargo:,.0f} kg</div>
                                 </div>
-                                <div style="width: 1px; height: 30px; background: #ccc; margin: 0 10px;"></div>
+                                <div style="width: 1px; height: 32px; background: #E8E6E0; margin: 0 12px;"></div>
                                 <div style="flex: 1;">
-                                    <div style="font-size: 12px; color: #555; margin-bottom: 3px;">Volume:</div>
-                                    <div style="font-size: 16px; font-weight: 600; color: #2c3e50;">{vendor_loading:,.1f} m³</div>
+                                    <div style="font-size: 12px; color: #9A9892; margin-bottom: 4px; font-weight: 500;">Volume:</div>
+                                    <div style="font-size: 17px; font-weight: 600; color: #2C2B28;">{vendor_loading:,.1f} m³</div>
                                 </div>
                             </div>
                         </div>
@@ -1596,9 +1594,7 @@ class DeliveryOptimizer:
             primary_area_unit='sqkilometers'
         ).add_to(m)
         
-        # Add mini map for overview
-        minimap = plugins.MiniMap(toggle_display=True, position='bottomright')
-        m.add_child(minimap)
+        # Mini map removed per user request
         
         # Calculate total distance across all routes
         total_distance = sum(stats['total_distance'] for stats in route_stats.values())
@@ -1611,88 +1607,27 @@ class DeliveryOptimizer:
         num_routes = len(vehicles_used)
         num_vendors = len(coords) - 1
         
-        # Add title/legend as custom HTML with working hover tooltip
-        title_html = f'''
-        <div id="route-title-card" style="position: fixed; 
-                    top: 10px; 
-                    left: 50%; 
-                    transform: translateX(-50%);
-                    width: auto;
-                    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%);
-                    border-radius: 12px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    padding: 15px 30px;
-                    z-index: 9999;
-                    border: 1px solid rgba(0,0,0,0.1);
-                    cursor: help;
-                    position: relative;">
-            <h3 style="margin: 0; 
-                       color: #2c3e50; 
-                       font-family: 'Segoe UI', Arial, sans-serif;
-                       font-size: 20px;
-                       font-weight: 600;
-                       text-align: center;">
-                🚛 Optimized Delivery Routes
-            </h3>
-            <p style="margin: 5px 0 0 0; 
-                      color: #7f8c8d; 
-                      font-size: 13px;
-                      text-align: center;">
-                {num_routes} Vehicle{'s' if num_routes > 1 else ''} • {num_vendors} Vendor{'s' if num_vendors > 1 else ''} • {distance_formatted} km
-            </p>
-        </div>
-        
-        <div id="route-tooltip" style="display: none;
-                    position: fixed;
-                    background: rgba(30, 30, 40, 0.98);
-                    color: white;
-                    padding: 16px 24px;
-                    border-radius: 12px;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-                    font-family: 'Segoe UI', sans-serif;
-                    font-size: 13px;
-                    line-height: 2;
-                    z-index: 10000;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    pointer-events: none;">
-            <div style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 8px; margin-bottom: 8px; font-weight: 600;">
-                Solution Details
-            </div>
-            <div><strong>Solver:</strong> {solver_type}</div>
-            <div><strong>Time:</strong> {solving_time:.2f}s</div>
-            <div><strong>Depots:</strong> {num_depots}</div>
-            <div><strong>Routes:</strong> {num_routes}</div>
-            <div><strong>Vendors:</strong> {num_vendors}</div>
-            <div><strong>Distance:</strong> {distance_formatted} km</div>
-        </div>
-        
-        <script>
-            (function() {{
-                var titleCard = document.getElementById('route-title-card');
-                var tooltip = document.getElementById('route-tooltip');
-                
-                if (titleCard && tooltip) {{
-                    titleCard.addEventListener('mouseenter', function(e) {{
-                        var rect = titleCard.getBoundingClientRect();
-                        tooltip.style.display = 'block';
-                        tooltip.style.left = rect.left + (rect.width / 2) + 'px';
-                        tooltip.style.top = (rect.bottom + 10) + 'px';
-                        tooltip.style.transform = 'translateX(-50%)';
-                    }});
-                    
-                    titleCard.addEventListener('mouseleave', function() {{
-                        tooltip.style.display = 'none';
-                    }});
-                }}
-            }})();
-        </script>
-        '''
-        m.get_root().html.add_child(folium.Element(title_html))
-        
         # Add Excel-like collapsible route filter
         num_routes = len(route_feature_groups)
         excel_filter_html = f'''
         <style>
+            /* Layer control background - transparent by default, white when routes visible */
+            .leaflet-control-layers-expanded {{
+                background: transparent !important;
+                backdrop-filter: none !important;
+                box-shadow: none !important;
+                border: none !important;
+                transition: all 0.3s ease;
+            }}
+            
+            .leaflet-control-layers-expanded.has-visible-routes {{
+                background: rgba(255, 255, 255, 0.98) !important;
+                backdrop-filter: blur(12px) !important;
+                box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
+                border: 1px solid rgba(232, 230, 224, 0.6) !important;
+                border-radius: 12px !important;
+            }}
+            
             .route-filter-header {{
                 padding: 10px 12px;
                 border-bottom: 1px solid rgba(0, 0, 0, 0.1);
@@ -1842,6 +1777,40 @@ class DeliveryOptimizer:
                     }});
                 }}
                 
+                // Function to update panel transparency based on visible routes
+                var userHasInteracted = false;
+                function updatePanelTransparency() {{
+                    if (!userHasInteracted) return; // Don't apply transparency until user interacts
+                    
+                    var layerControlContainer = document.querySelector('.leaflet-control-layers-expanded');
+                    if (!layerControlContainer) return;
+                    
+                    var hasVisibleRoutes = false;
+                    originalLabels.forEach(function(label) {{
+                        var checkbox = label.querySelector('input[type="checkbox"]');
+                        if (checkbox && checkbox.checked) {{
+                            hasVisibleRoutes = true;
+                        }}
+                    }});
+                    
+                    if (hasVisibleRoutes) {{
+                        layerControlContainer.classList.add('has-visible-routes');
+                    }} else {{
+                        layerControlContainer.classList.remove('has-visible-routes');
+                    }}
+                }}
+                
+                // Listen to all checkbox changes
+                originalLabels.forEach(function(label) {{
+                    var checkbox = label.querySelector('input[type="checkbox"]');
+                    if (checkbox) {{
+                        checkbox.addEventListener('change', function() {{
+                            userHasInteracted = true;
+                            updatePanelTransparency();
+                        }});
+                    }}
+                }});
+                
                 console.log('Route filter initialized with', {num_routes}, 'routes');
             }}
             
@@ -1871,4 +1840,5 @@ class DeliveryOptimizer:
             import os
             webbrowser.open('file://' + os.path.abspath(save_path))
         
-        return m
+        # Return map and statistics
+        return m, route_stats

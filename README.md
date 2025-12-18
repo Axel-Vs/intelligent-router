@@ -1,21 +1,41 @@
-# 📦 Parcel Delivery Optimizer
+# 🧠 Intelligent Router
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![OR-Tools](https://img.shields.io/badge/OR--Tools-9.7%2B-orange.svg)](https://developers.google.com/optimization)
+[![Flask](https://img.shields.io/badge/Flask-3.1%2B-black.svg)](https://flask.palletsprojects.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A sophisticated optimization system for vehicle routing and parcel delivery, leveraging OR-Tools' CBC solver and real-world routing data from OSRM. The system optimizes delivery routes while considering vehicle capacity constraints, time windows, and real road networks.
+An elegant, enterprise-grade AI-powered route optimization platform for vehicle routing and parcel delivery. Featuring a sophisticated web interface with real-time optimization, interactive map visualization, and comprehensive network parameter configuration. Built with OR-Tools, ALNS metaheuristics, and OSRM routing integration.
 
 ## ✨ Features
 
-- 🚚 **Multi-Vehicle Routing Optimization** - Efficiently assigns parcels to vehicles and optimizes delivery routes
-- 🗺️ **Interactive Map Visualization** - Beautiful Folium-based maps with real road routing via OSRM
-- ⏱️ **Dual Solver Architecture** - CBC MIP for exact solutions + ALNS metaheuristic for large-scale problems
-- 📊 **Comprehensive Analytics** - Detailed route statistics, capacity utilization, and performance metrics
-- 🌍 **Real-World Routing** - Uses OSRM for accurate distance and travel time calculations
-- 📍 **Geocoding Support** - Automatic address-to-coordinate conversion with caching
-- 🎯 **Scalable to 50+ Vendors** - Handles large datasets with metaheuristic optimization
-- 📱 **Excel-Style Route Filter** - Collapsible, transparent UI for easy route management
+### 🎨 Enterprise Web Interface
+- **Elegant Design System** - Refined light beige/bone color palette with black accents
+- **2-Column Layout** - Compact 320px sidebar with optimization results + interactive map visualization
+- **Intelligent Branding** - Deep navy "Intelligent Router" branding with enterprise badge
+- **Real-Time Optimization** - Web-based interface with live progress tracking and results
+- **Responsive Parameters** - 12 configurable network parameters in clean 2-column grid
+- **Compact Results Display** - Optimized stat cards showing routes, distance, cargo, volume, and solving time
+
+### 🚚 Advanced Optimization
+- **Multi-Vehicle Routing** - Efficiently assigns parcels to vehicles and optimizes delivery routes
+- **Dual Solver Architecture** - CBC MIP for exact solutions + ALNS metaheuristic for large-scale problems
+- **12 Network Parameters** - Comprehensive configuration for depot hours, driving limits, vehicle capacity
+- **Smart Auto-Scaling** - Automatically switches to metaheuristic for datasets with 20+ vendors
+- **Scalable to 50+ Vendors** - Handles large datasets with advanced ALNS optimization
+
+### 🗺️ Interactive Visualization
+- **Beautiful Map Interface** - Folium-based maps with real road routing via OSRM
+- **Multiple Tile Layers** - Street, Light, Dark, and Terrain views with layer control
+- **Route Visibility Control** - Individual route toggles with Select All/Deselect All
+- **Transparent Panel Design** - Excel-style collapsible filters with smart transparency
+- **Detailed Tooltips** - Hover information showing cargo, distance, duration, and capacity utilization
+
+### 📊 Comprehensive Analytics
+- **Route Statistics** - Total routes, vendors, distance, cargo weight, loading volume
+- **Performance Metrics** - Solving time, vehicle utilization, capacity percentages
+- **Real-World Routing** - Uses OSRM for accurate distance and travel time calculations
+- **Geocoding Support** - Automatic address-to-coordinate conversion with persistent caching
 
 ## 🎯 Key Capabilities
 
@@ -81,26 +101,50 @@ pip install -e .
 ```
 > This installs the package in editable mode using `pyproject.toml`
 
-### Quick Start
+### Quick Start - Web Application
 
-1. **Prepare your data**
-   - Place vendor data in `data/amazon_test_dataset.csv`
-   - Ensure required columns: vendor coordinates, cargo weight, loading volume, delivery dates
+1. **Start the web server**
+```bash
+python app.py
+```
 
-2. **Configure parameters** (Optional)
-   - Edit `model/config/model_params.txt` for optimization settings
-   - Edit `model/config/network_params.txt` for network configuration
-   - Edit `model/config/simulation_params.txt` for simulation parameters
+2. **Open your browser**
+   - Navigate to `http://localhost:8080`
+   - You'll see the elegant Intelligent Router interface
 
-3. **Run the simulator**
+3. **Upload your dataset**
+   - Click the upload area or drag-and-drop your CSV file
+   - Supported format: vendor coordinates, cargo weight, loading volume
+
+4. **Configure optimization parameters**
+   - **Depot Hours**: Start (8) and Close (18) times
+   - **Vendor Hours**: Start (6) and Pickup End (14) times
+   - **Time Windows**: Early Arrival (24h) and Late Arrival (24h) penalties
+   - **Loading & Driving**: Loading Time (2h), Max Driving (15h), Driving Start/Stop (6-21)
+   - **Vehicle Capacity**: Max Weight (30 kg), Max Loading Meters (70 m³)
+
+5. **Run optimization**
+   - Check "ALNS METAHEURISTIC" for large datasets (20+ vendors)
+   - Click "INITIATE OPTIMIZATION"
+   - Watch the progress message: "Finding optimal routes with minimal distance and fewest vehicles required"
+
+6. **View results**
+   - **Left Panel**: Optimization results with routes, vendors, distance, cargo, volume, solving time
+   - **Right Panel**: Interactive map with all routes visualized
+   - **Route Control**: Toggle individual routes or use Select All/Deselect All
+
+### Command Line Usage (Alternative)
+
+For batch processing or programmatic use:
+
 ```bash
 python example/simulator.py
 ```
 
-4. **View results**
-   - Solution summary printed to console
-   - Interactive map saved to `results/optimization/routes_[date].html`
-   - Solution arrays saved as `.npy` files
+**Results:**
+- Solution summary printed to console
+- Interactive map saved to `results/optimization/routes_[date].html`
+- Solution arrays saved as `.npy` files
 
 ## 📊 Data Format
 
@@ -129,6 +173,25 @@ vendor_latitude,vendor_longitude,recipient_latitude,recipient_longitude,vendor N
 
 ## ⚙️ Configuration
 
+### Web Application Parameters
+
+The web interface provides 12 configurable network parameters in an elegant 2-column grid:
+
+| Parameter | Description | Default | Unit |
+|-----------|-------------|---------|------|
+| **Depot Start** | Depot opening hour | 8 | Hour |
+| **Depot Close** | Depot closing hour | 18 | Hour |
+| **Vendor Start** | Vendor availability start | 6 | Hour |
+| **Pickup End** | Latest pickup time | 14 | Hour |
+| **Early Arrival** | Early arrival penalty window | 24 | Hours |
+| **Late Arrival** | Late arrival penalty window | 24 | Hours |
+| **Loading Time** | Time required for loading | 2 | Hours |
+| **Max Driving** | Maximum driving hours per vehicle | 15 | Hours |
+| **Driving Start** | Earliest driving start time | 6 | Hour |
+| **Driving Stop** | Latest driving end time | 21 | Hour |
+| **Max Weight** | Maximum vehicle cargo weight | 30 | kg |
+| **Max Loading Meters** | Maximum vehicle volume capacity | 70 | m³ |
+
 ### Model Parameters (`model/config/model_params.txt`)
 ```ini
 max_nodes = 100                   # Maximum number of nodes to process
@@ -144,7 +207,18 @@ alns_cooling = 0.997             # ALNS: cooling rate
 ### Network Parameters (`model/config/network_params.txt`)
 ```ini
 discretization_constant = 4       # Time discretization in hours
-max_driving_hours = 42           # Maximum driving time per vehicle
+starting_depot = 8               # Depot opening hour
+closing_depot = 18               # Depot closing hour
+vendor_start_hr = 6              # Vendor availability start
+pickup_end_hr = 14               # Latest pickup time
+earl_arv = 24                    # Early arrival penalty window
+late_arv = 24                    # Late arrival penalty window
+loading = 2                      # Loading time in hours
+max_driving = 15                 # Maximum driving hours
+driving_starts = 6               # Earliest driving start
+driving_stop = 21                # Latest driving end
+max_weight = 30                  # Maximum cargo weight (kg)
+max_ldms = 70                    # Maximum loading meters (m³)
 ```
 
 ### Simulation Parameters (`model/config/simulation_params.txt`)
@@ -171,7 +245,27 @@ The system uses the free OSRM routing service for:
 
 ## 📈 Output & Visualization
 
-### Console Output
+### Web Interface Results
+
+The elegant 2-column layout displays results in a compact sidebar:
+
+**Optimization Results Panel (Left):**
+- **ROUTES**: Number of vehicles used (e.g., 28)
+- **VENDORS**: Total vendor pickups (e.g., 58)
+- **TOTAL DISTANCE**: Aggregate route distance in km (e.g., 97,129.7 km)
+- **TOTAL CARGO**: Sum of all cargo weight in kg (e.g., 561,002 kg)
+- **TOTAL LOADING**: Aggregate volume in m³ (e.g., 1,314.65 m³)
+- **SOLVING TIME**: Optimization duration in seconds (e.g., 10.62 sec)
+
+**Interactive Map (Right):**
+- Full-screen route visualization with multiple tile layers
+- Colored routes for each vehicle with OSRM-based road routing
+- Vendor markers showing cargo details and pickup locations
+- Depot markers with black headers indicating start/end points
+- Layer control panel for toggling individual routes
+- Select All/Deselect All for route visibility
+
+### Console Output (Command Line)
 ```
 ================================================================================
                          📊 OPTIMIZATION SOLUTION SUMMARY
@@ -199,7 +293,7 @@ Total Distance: 6327 km
 Distance reduction achieved: 24.03%
 ```
 
-### Interactive Map Features
+### Interactive Map Features (Web & Saved Files)
 
 **Hover over routes** to see:
 - 🚚 Vehicle ID and route step (e.g., "Step 1/2")
@@ -232,6 +326,9 @@ Distance reduction achieved: 24.03%
 
 ```
 parcel-delivery-solver/
+├── app.py                        # Flask web application server (Port 8080)
+├── web/
+│   └── index.html                # Elegant web interface with 2-column layout
 ├── data/                          # Input datasets and cache
 │   ├── amazon_test_dataset.csv   # Main dataset
 │   ├── geocode_cache.csv         # Geocoding cache
@@ -239,24 +336,32 @@ parcel-delivery-solver/
 ├── model/
 │   ├── config/                   # Configuration files
 │   │   ├── model_params.txt      # Solver parameters
-│   │   ├── network_params.txt    # Network configuration
+│   │   ├── network_params.txt    # 12 network parameters (depot, driving, capacity)
 │   │   └── simulation_params.txt # Simulation settings
 │   ├── graph_creator/            # Time-expanded network generation
 │   │   └── graph_creator.py
 │   ├── optimizer/                # Optimization model
-│   │   └── delivery_model.py    # Main optimization logic
+│   │   └── delivery_model.py    # ALNS + CBC optimization with Folium maps
 │   └── utils/                    # Utility functions
 │       ├── geocoder.py           # Address geocoding
 │       ├── pre_processing.py     # Data preprocessing
-│       └── project_utils.py      # Distance/routing utilities
+│       └── project_utils.py      # OSRM distance/routing utilities
 ├── example/
-│   └── simulator.py              # Main simulation script
+│   └── simulator.py              # Command-line simulation script
 ├── results/                      # Output directory
-│   └── optimization/             # Solution files and maps
+│   └── optimization/             # Solution files and interactive maps
 ├── docs/                         # Documentation
 ├── requirements.txt              # Python dependencies
+├── pyproject.toml                # Package configuration
 └── README.md                     # This file
 ```
+
+### Web Application Stack
+- **Backend**: Flask 3.1+ (Python web framework)
+- **Frontend**: Vanilla HTML/CSS/JavaScript with elegant design system
+- **Optimization**: OR-Tools 9.7+ with ALNS metaheuristics
+- **Mapping**: Folium with OSRM routing integration
+- **Colors**: Light beige backgrounds (#FAFAF8, #F7F7F5), black text/buttons, deep navy branding (#1f2d3d)
 
 ## 🧮 Algorithms & Methods
 
@@ -349,34 +454,91 @@ Optimize deliveries for 3 vendors across the US with 2 vehicles available.
 - Distance reduction: 24.03% vs direct routing
 - Vehicles used: 2 out of 3 available
 
+## 🎨 Design System
+
+The Intelligent Router features an elegant, enterprise-grade design system:
+
+### Color Palette
+- **Primary Background**: #FAFAF8 (Light bone/beige)
+- **Secondary Background**: #F7F7F5 (Darker bone)
+- **Surface**: #FFFFFF (Pure white for cards)
+- **Border**: #E8E6E0 (Subtle beige border)
+- **Text Primary**: #000000 (Black for main content)
+- **Text Secondary**: #000000 (Black for labels)
+- **Text Muted**: #9A9892 (Light gray for units and hints)
+- **Accent**: #000000 (Black for buttons and emphasis)
+- **Branding**: #1f2d3d (Deep navy for "Intelligent Router" title)
+
+### Typography
+- **Font Family**: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system fonts
+- **Title**: 28px, Bold (700), Deep Navy (#1f2d3d)
+- **Section Headers**: 10px, Uppercase, Bold (600), Letter Spacing
+- **Parameter Labels**: 9px, Uppercase, Light Gray for units
+- **Stats**: 16px values, 9px labels
+
+### Layout
+- **2-Column Grid**: 320px sidebar + flexible map area
+- **Compact Spacing**: 8-10px padding, 6-8px gaps
+- **Border Radius**: 6-12px for modern, refined corners
+- **Shadows**: Soft (0 2px 8px rgba(0,0,0,0.04))
+
+### Components
+- **Buttons**: Black background, white text, 32px height, rounded 6px
+- **Input Fields**: 32px height, white background, aligned rows
+- **Stat Cards**: 10px padding, 16px stat values, minimal design
+- **Parameters Grid**: 2 columns, aligned inputs, light gray units
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
+
+**Issue: "Web app not loading at localhost:8080"**
+- Solution: Ensure Flask server is running (`python app.py`). Check if port 8080 is already in use.
+- Check console for errors: `lsof -ti:8080` to see if port is occupied
+
+**Issue: "CSV upload fails"**
+- Solution: Ensure CSV has required columns: vendor coordinates, cargo weight, loading volume
+- Check file encoding (UTF-8 recommended)
+- Verify numeric values are properly formatted
 
 **Issue: "Depot coordinates not found"**
 - Solution: The system uses Seattle (47.6062, -122.3321) as default. Configure depot coordinates in your dataset or modify the code.
 
 **Issue: "OSRM connection timeout"**
 - Solution: Check internet connection. OSRM requires online access to router.project-osrm.org
+- Try again after a moment - OSRM may be temporarily unavailable
 
 **Issue: "No feasible solution found"**
 - Solutions:
-  - Switch to metaheuristic solver (set `use_metaheuristic = True`)
+  - Switch to metaheuristic solver (check "ALNS METAHEURISTIC" in web interface)
   - Increase `solver_time_limit` in model_params.txt
-  - Increase `max_driving_hours` in network_params.txt
-  - Reduce dataset size or adjust vehicle capacities
+  - Adjust network parameters: increase Max Driving, adjust time windows
+  - Reduce dataset size or increase vehicle capacities (Max Weight, Max Loading Meters)
+
+**Issue: "Optimization takes too long"**
+- Solution: Enable ALNS metaheuristic for datasets with 20+ vendors
+- Reduce `alns_iterations` in model_params.txt for faster (but potentially less optimal) solutions
+- Consider reducing date range in simulation parameters
 
 **Issue: "Geocoding failed"**
 - Solution: Ensure coordinates are provided in the CSV or check Nominatim service availability
+- Use geocode cache (`data/geocode_cache.csv`) to avoid repeated API calls
 
 **Issue: "Division by zero warnings"**
 - This is normal for vendors at the same location - the system handles it with circular markers
 
 **Issue: "max() iterable argument is empty"**
-- Solution: Use metaheuristic solver for large date ranges (set `use_metaheuristic = True`)
+- Solution: Use metaheuristic solver for large date ranges (enable ALNS checkbox)
 
-**Issue: "Routes not toggling on map"**
-- Solution: Refresh the HTML map in your browser - checkboxes are synced with Folium layer control
+**Issue: "Routes not visible on map"**
+- Solution: Check the Routes dropdown in top-right - ensure routes are toggled on
+- Use "Select All" to quickly enable all routes
+- Refresh the page if routes don't appear after optimization
+
+**Issue: "Map not displaying correctly"**
+- Solution: Ensure JavaScript is enabled in browser
+- Check browser console for errors (F12)
+- Try different tile layer (Street, Light, Dark, Terrain)
 
 ## 🤝 Contributing
 
@@ -423,23 +585,37 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Author:** Axel Vargas  
 **GitHub:** [@Axel-Vs](https://github.com/Axel-Vs)  
-**Project:** [parcel-delivery-solver](https://github.com/Axel-Vs/parcel-delivery-solver)
+**Project:** [Intelligent Router](https://github.com/Axel-Vs/parcel-delivery-solver)
 
 For questions, issues, or suggestions:
 - 📫 Open an issue on GitHub
 - 💬 Start a discussion
 - 🐛 Report bugs with detailed information
+- 🌐 Access the web interface at http://localhost:8080
 
-##  Additional Resources
+## 📚 Additional Resources
 
 - [OR-Tools Documentation](https://developers.google.com/optimization/routing)
 - [Vehicle Routing Problem](https://en.wikipedia.org/wiki/Vehicle_routing_problem)
 - [OSRM API Documentation](http://project-osrm.org/docs/v5.5.1/api/)
 - [Time-Expanded Networks](https://en.wikipedia.org/wiki/Time-expanded_network)
+- [Flask Documentation](https://flask.palletsprojects.com/)
+- [Folium Documentation](https://python-visualization.github.io/folium/)
+
+## 🎯 Use Cases
+
+**Intelligent Router** is ideal for:
+- 📦 **E-commerce & Logistics** - Optimize delivery routes for online orders
+- 🚚 **Fleet Management** - Minimize fuel costs and vehicle usage
+- 📍 **Last-Mile Delivery** - Efficient urban delivery planning
+- 🏭 **Manufacturing** - Pickup route optimization from suppliers
+- 🌍 **Multi-City Routing** - Long-distance transportation planning
+- ⏱️ **Time-Sensitive Deliveries** - Routes with strict time windows
 
 ---
 
 <p align="center">
-  <b>Made with ❤️ for efficient logistics and optimization</b><br>
+  <b>🧠 Intelligent Router - Enterprise AI-Powered Logistics Optimization</b><br>
+  Made with ❤️ for efficient routing and sustainable transportation<br>
   ⭐ Star this repo if you find it useful!
 </p>

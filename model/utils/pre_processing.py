@@ -21,7 +21,7 @@ import pycountry
 import webbrowser
 import coloredlogs
 
-from project_utils import data_pre_process
+from model.utils.project_utils import data_pre_process
 
 # Configure logging
 coloredlogs.install(level='DEBUG')
