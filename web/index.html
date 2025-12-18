@@ -785,7 +785,7 @@
 
             .section-header,
             .section-title {
-                font-size: 12px;
+                font-size: 13px;
             }
         }
 
@@ -1309,9 +1309,14 @@
                 if (window.innerWidth > 768) {
                     const sidebar = document.querySelector('.sidebar');
                     const overlay = document.querySelector('.mobile-overlay');
+                    const menuButton = document.querySelector('.mobile-menu-toggle');
                     if (sidebar && overlay) {
                         sidebar.classList.remove('open');
                         overlay.classList.remove('show');
+                        // Update aria-expanded for accessibility
+                        if (menuButton) {
+                            menuButton.setAttribute('aria-expanded', 'false');
+                        }
                     }
                 }
             });
