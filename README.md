@@ -1,5 +1,11 @@
 # 🧠 Intelligent Router
 
+![Platform Screenshot 1](docs/platform_screenshot_1.png)
+*Route visualization with interactive map and multi-route display.*
+
+![Platform Screenshot 2](docs/platform_screenshot_2.png)
+*Enterprise web interface: parameter configuration and optimization results.*
+
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![OR-Tools](https://img.shields.io/badge/OR--Tools-9.7%2B-orange.svg)](https://developers.google.com/optimization)
 [![Flask](https://img.shields.io/badge/Flask-3.1%2B-black.svg)](https://flask.palletsprojects.com/)
