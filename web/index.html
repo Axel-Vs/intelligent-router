@@ -6,20 +6,21 @@
     <title>Intelligent Router | Enterprise Logistics Platform</title>
     <style>
         :root {
-            --primary-bg: #FAFAF8;
-            --secondary-bg: #F7F7F5;
+            --primary-bg: #F9F8F6;
+            --secondary-bg: #F3F1ED;
             --surface-bg: #FFFFFF;
-            --border-color: #E8E6E0;
-            --text-primary: #000000;
-            --text-secondary: #000000;
-            --text-muted: #000000;
-            --accent-blue: #000000;
+            --border-color: #E4E0D8;
+            --text-primary: #1A1816;
+            --text-secondary: #3D3A35;
+            --text-muted: #8B8680;
+            --accent-blue: #2C5282;
             --accent-success: #5A7A65;
             --accent-warning: #B39A7C;
             --accent-error: #9A6A68;
-            --grid-line: #F0EEE8;
-            --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
-            --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.06);
+            --grid-line: #EBE7DF;
+            --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.12);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
         }
 
         * {
@@ -32,11 +33,12 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
             background: var(--primary-bg);
             color: var(--text-primary);
-            line-height: 1.5;
+            line-height: 1.6;
             font-size: 14px;
             font-weight: 400;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            letter-spacing: 0.3px;
         }
 
         .platform-container {
@@ -68,10 +70,19 @@
             font-weight: 700;
             letter-spacing: -0.03em;
             color: #1f2d3d;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .platform-title:hover h1 {
+            opacity: 0.7;
         }
 
         .platform-badge {
-            background: var(--accent-blue);
+            background: #000000;
             color: #fff;
             padding: 4px 10px;
             font-size: 11px;
@@ -85,6 +96,84 @@
             display: flex;
             gap: 16px;
             align-items: center;
+        }
+
+        .sidebar-toggle {
+            background: var(--surface-bg);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            padding: 8px;
+            transition: all 0.2s ease;
+            opacity: 0.7;
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 100;
+            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-toggle:hover {
+            opacity: 1;
+            background: var(--primary-bg);
+        }
+
+        .sidebar-toggle::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-left: 2px solid #000000;
+            border-bottom: 2px solid #000000;
+            transform: rotate(45deg);
+            margin-right: -2px;
+        }
+
+        .sidebar-show {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--surface-bg);
+            border: 1px solid var(--border-color);
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: var(--shadow-medium);
+            width: 32px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-layout.sidebar-hidden .sidebar-show {
+            opacity: 0.7;
+            pointer-events: auto;
+        }
+
+        .sidebar-show:hover {
+            opacity: 1;
+            background: var(--primary-bg);
+            width: 36px;
+        }
+
+        .sidebar-show::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid #000000;
+            border-bottom: 2px solid #000000;
+            transform: rotate(-45deg);
+            margin-left: -2px;
         }
 
         .nav-stat {
@@ -106,6 +195,11 @@
             grid-template-columns: 320px 1fr;
             height: calc(100vh - 60px);
             overflow: hidden;
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .main-layout.sidebar-hidden {
+            grid-template-columns: 0 1fr;
         }
 
         /* Sidebar */
@@ -113,6 +207,13 @@
             background: var(--surface-bg);
             border-right: 1px solid var(--border-color);
             overflow-y: auto;
+            transition: opacity 0.3s ease;
+            position: relative;
+            padding-bottom: 40px;
+        }
+
+        .main-layout.sidebar-hidden .sidebar {
+            display: none;
         }
 
         .sidebar-section {
@@ -140,13 +241,13 @@
         }
 
         .upload-zone:hover {
-            border-color: var(--accent-blue);
+            border-color: #000000;
             background: var(--primary-bg);
             box-shadow: var(--shadow-soft);
         }
 
         .upload-zone.dragover {
-            border-color: var(--accent-blue);
+            border-color: #000000;
             border-style: solid;
             background: var(--primary-bg);
             box-shadow: var(--shadow-medium);
@@ -226,20 +327,20 @@
             background: var(--secondary-bg);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
-            padding: 6px 10px;
-            font-size: 12px;
+            padding: 8px 12px;
+            font-size: 13px;
             font-family: inherit;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-            height: 32px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            height: 36px;
             box-sizing: border-box;
         }
 
         .param-input:focus {
             outline: none;
-            border-color: var(--accent-blue);
+            border-color: #000000;
             background: var(--surface-bg);
-            box-shadow: 0 0 0 3px rgba(107, 101, 96, 0.08);
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
         }
 
         .checkbox-group {
@@ -257,27 +358,32 @@
         /* Buttons */
         .btn {
             width: 100%;
-            padding: 14px 24px;
-            font-size: 13px;
+            padding: 12px 20px;
+            font-size: 12px;
             font-weight: 600;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.05em;
             cursor: pointer;
             border: none;
-            border-radius: 10px;
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            transition: all 0.2s ease;
             font-family: inherit;
+            text-transform: uppercase;
         }
 
         .btn-primary {
-            background: var(--accent-blue);
+            background: #000000;
             color: #fff;
             box-shadow: var(--shadow-soft);
         }
 
         .btn-primary:hover:not(:disabled) {
-            background: #2C2B28;
+            background: #333333;
             box-shadow: var(--shadow-medium);
             transform: translateY(-1px);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
         }
 
         .btn-primary:disabled {
@@ -290,11 +396,19 @@
         .content-area {
             overflow-y: auto;
             background: var(--primary-bg);
+            padding-bottom: 40px;
         }
 
         .content-section {
             padding: 24px;
             border-bottom: 1px solid var(--grid-line);
+        }
+
+        #runsManager {
+            padding: 0 !important;
+            height: 100%;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .map-stats-layout {
@@ -315,12 +429,12 @@
         }
 
         .section-title {
-            font-size: 13px;
+            font-size: 12px;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             color: var(--text-muted);
-            margin-bottom: 20px;
-            font-weight: 600;
+            margin-bottom: 24px;
+            font-weight: 700;
         }
 
         /* Statistics Grid */
@@ -333,8 +447,8 @@
         .stat-card {
             background: var(--surface-bg);
             border: 1px solid var(--border-color);
-            padding: 10px;
-            border-radius: 10px;
+            padding: 16px;
+            border-radius: 12px;
             box-shadow: var(--shadow-soft);
             transition: all 0.3s ease;
         }
@@ -342,22 +456,24 @@
         .stat-card:hover {
             box-shadow: var(--shadow-medium);
             transform: translateY(-2px);
+            border-color: #000000;
         }
 
         .stat-label {
-            font-size: 9px;
+            font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
             color: var(--text-muted);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
+            font-weight: 700;
         }
 
         .stat-value {
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 18px;
+            font-weight: 700;
             font-variant-numeric: tabular-nums;
             color: var(--text-primary);
-            line-height: 1;
+            line-height: 1.2;
         }
 
         .stat-unit {
@@ -374,7 +490,7 @@
             position: relative;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: var(--shadow-soft);
+            box-shadow: var(--shadow-medium);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -412,7 +528,7 @@
         }
 
         .route-card:hover {
-            border-color: var(--accent-blue);
+            border-color: #000000;
             box-shadow: var(--shadow-medium);
             transform: translateY(-1px);
         }
@@ -538,7 +654,7 @@
             width: 52px;
             height: 52px;
             border: 3px solid var(--border-color);
-            border-top-color: var(--accent-blue);
+            border-top-color: #000000;
             border-radius: 50%;
             animation: spin 1s ease-in-out infinite;
             margin: 0 auto 20px;
@@ -603,35 +719,271 @@
         input[type="file"] {
             display: none;
         }
+
+        /* Data Summary Card */
+        .data-summary-card {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .data-summary-card.show {
+            display: block;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 10px;
+        }
+
+        .summary-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .summary-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            margin-left: 4px;
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #1A1816;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Action Buttons Group */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-secondary {
+            background: var(--surface-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--secondary-bg);
+            border-color: #000000;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--surface-bg);
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            justify-content: flex-end;
+        }
+
+        /* Validation Error */
+        .param-input.error {
+            border-color: var(--accent-error);
+            background: rgba(154, 106, 104, 0.1);
+        }
+
+        /* Undo/Redo Stack */
+        .history-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            background: #000000;
+            padding: 0 32px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 16px;
+            background: #000000;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: #000000;
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: #000000;
+            border-bottom-color: #ffffff;
+        }
+
+        .tab-content {
+            display: none;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
     </style>
 </head>
 <body>
     <div class="platform-container">
+        <!-- DEBUG PANEL -->
+        <div id="debugPanel" style="position:fixed; bottom:10px; right:10px; background:black; color:lime; padding:10px; border-radius:5px; font-family:monospace; font-size:10px; max-width:300px; max-height:200px; overflow:auto; z-index:9999; display:none;">
+            <div id="debugOutput"></div>
+        </div>
         <!-- Top Navigation -->
         <div class="top-nav">
-            <div class="platform-title">
-                <h1>Intelligent Router</h1>
-                <span class="platform-badge">ENTERPRISE</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="platform-title" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start; cursor: pointer;" onclick="switchTab('optimizer')">
+                    <h1>Intelligent Router</h1>
+                    <div style="font-size: 11px; color: var(--text-muted); letter-spacing: 0.05em;">Advanced vehicle routing optimization for enterprise logistics</div>
+                </div>
             </div>
-            <div class="nav-actions">
+            <div class="nav-actions" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <span class="platform-badge">ENTERPRISE</span>
                 <div class="nav-stat">
                     STATUS <span>OPERATIONAL</span>
                 </div>
             </div>
         </div>
 
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('optimizer')">Optimizer</button>
+            <button class="tab-btn" onclick="switchTab('runs')">Saved Runs</button>
+        </div>
+
         <!-- Main Layout -->
         <div class="main-layout">
+            <button class="sidebar-show" onclick="toggleSidebar()" title="Show Sidebar"></button>
             <!-- Sidebar -->
             <div class="sidebar">
+                <button class="sidebar-toggle" onclick="toggleSidebar()" title="Hide Sidebar"></button>
                 <!-- Data Upload Section -->
                 <div class="sidebar-section">
                     <div class="section-header">DATA INPUT</div>
-                    <div class="upload-zone" onclick="document.getElementById('csvFile').click()">
-                        <div class="upload-label">Upload Dataset</div>
-                        <div class="upload-hint">CSV Format Required</div>
-                        <input type="file" id="csvFile" accept=".csv">
+                    
+                    <!-- Unified Input Zone -->
+                    <div style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                        <!-- Upload Option -->
+                        <div class="upload-zone" onclick="triggerFileInput()" style="padding: 16px; margin: 0; border-radius: 0; border: none; border-bottom: 1px solid var(--border-color);">
+                            <div class="upload-label" style="font-size: 11px; margin-bottom: 4px;">Upload New CSV</div>
+                            <div class="upload-hint" style="font-size: 10px;">Click to browse</div>
+                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                        </div>
+                        
+                        <!-- Past Run Option -->
+                        <div style="padding: 12px; background: var(--surface-bg);">
+                            <select class="param-input" id="pastRunSelect" onchange="loadPastRunData()" style="width: 100%; font-size: 10px; padding: 6px 8px; height: 28px; margin: 0;">
+                                <option value="">Load from past run...</option>
+                            </select>
+                        </div>
                     </div>
+                    
+                    <!-- Data Summary -->
+                    <div class="data-summary-card" id="dataSummary">
+                        <div class="summary-row">
+                            <span class="summary-label">VENDORS</span>
+                            <span class="summary-value" id="summaryVendors">0</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">TOTAL WEIGHT</span>
+                            <span class="summary-value" id="summaryWeight">0 kg</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">TOTAL VOLUME</span>
+                            <span class="summary-value" id="summaryVolume">0 m³</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons" id="dataActions" style="display: none;">
+                        <button class="btn btn-secondary" onclick="clearData()" style="flex: 1; padding: 8px; font-size: 10px;">
+                            Clear Data
+                        </button>
+                    </div>
+                    
                     <div class="data-list" id="vendorList"></div>
                 </div>
 
@@ -641,7 +993,7 @@
                     
                     <div class="params-grid">
                         <div class="param-group">
-                            <label class="param-label">Depot Start <span style="color: #9A9892;">Hour</span></label>
+                            <label class="param-label">Depot Start <span style="color: #9A9892;">Hour</span><span class="tooltip">ⓘ<span class="tooltiptext">Hour when depot opens for vehicle departure</span></span></label>
                             <input type="number" class="param-input" id="startingDepot" value="8" min="0" max="23">
                         </div>
 
@@ -676,7 +1028,7 @@
                         </div>
 
                         <div class="param-group">
-                            <label class="param-label">Max Driving <span style="color: #9A9892;">Hours</span></label>
+                            <label class="param-label">Max Driving <span style="color: #9A9892;">Hours</span><span class="tooltip">ⓘ<span class="tooltiptext">Maximum continuous driving time per vehicle per day</span></span></label>
                             <input type="number" class="param-input" id="maxDriving" value="15" min="1">
                         </div>
 
@@ -691,7 +1043,7 @@
                         </div>
 
                         <div class="param-group">
-                            <label class="param-label">Max Weight <span style="color: #9A9892;">kg</span></label>
+                            <label class="param-label">Max Weight <span style="color: #9A9892;">kg</span><span class="tooltip">ⓘ<span class="tooltiptext">Maximum cargo weight capacity per vehicle</span></span></label>
                             <input type="number" class="param-input" id="maxWeight" value="30" min="1">
                         </div>
 
@@ -708,7 +1060,7 @@
                         </div>
                     </div>
 
-                    <button class="btn btn-primary" id="optimizeBtn" disabled onclick="runOptimization()">
+                    <button class="btn btn-primary" id="optimizeBtn" disabled onclick="runOptimization()" style="margin-top: 18px;">
                         INITIATE OPTIMIZATION
                     </button>
                 </div>
@@ -716,8 +1068,10 @@
 
             <!-- Content Area -->
             <div class="content-area">
-                <!-- Results Section -->
-                <div id="resultsContainer" class="results-container">
+                <!-- Tab 1: Optimizer -->
+                <div id="optimizer-tab" class="tab-content active">
+                    <!-- Results Section -->
+                    <div id="resultsContainer" class="results-container">
                     <!-- Map and Stats Layout -->
                     <div class="map-stats-layout">
                         <!-- Statistics Column -->
@@ -731,7 +1085,7 @@
                         <div class="map-column">
                             <div class="section-title">ROUTE VISUALIZATION</div>
                             <div class="map-container">
-                                <div class="map-placeholder">🗺️</div>
+                                <div class="map-placeholder"></div>
                                 <iframe id="mapFrame"></iframe>
                             </div>
                         </div>
@@ -741,7 +1095,147 @@
                     <div class="content-section">
                         <div id="routeSummary"></div>
                     </div>
+
+                    <!-- Route Operations Section -->
+                    <div class="content-section" id="routeOpsSection" style="display: none;">
+                        <div class="section-title">ROUTE OPERATIONS</div>
+                        
+                        <!-- Undo/Redo Controls -->
+                        <div class="history-controls">
+                            <button class="btn btn-secondary" onclick="undoOperation()" id="undoBtn" disabled style="padding: 8px 12px; font-size: 10px;">
+                                ← Undo
+                            </button>
+                            <button class="btn btn-secondary" onclick="redoOperation()" id="redoBtn" disabled style="padding: 8px 12px; font-size: 10px;">
+                                Redo →
+                            </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1200px;">
+                            <!-- Add Delivery -->
+                            <div style="background: var(--surface-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                                <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Add Delivery</div>
+                                <input type="text" class="param-input" id="addDeliveryVendor" placeholder="Vendor name or ID" style="margin-bottom: 10px;">
+                                <button class="btn btn-primary" onclick="addDeliveryToRoute()" style="width: 100%; padding: 10px; font-size: 11px;">
+                                    Add to Route
+                                </button>
+                            </div>
+
+                            <!-- Remove Delivery -->
+                            <div style="background: var(--surface-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                                <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Remove Delivery</div>
+                                <input type="text" class="param-input" id="removeDeliveryVendor" placeholder="Vendor name or ID" style="margin-bottom: 10px;">
+                                <button class="btn btn-primary" onclick="removeDeliveryFromRoute()" style="width: 100%; padding: 10px; font-size: 11px;">
+                                    Remove from Route
+                                </button>
+                            </div>
+
+                            <!-- Truck Breakdown -->
+                            <div style="background: var(--surface-bg); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                                <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Truck Breakdown</div>
+                                <select class="param-input" id="breakdownTruck" style="margin-bottom: 10px;">
+                                    <option value="">Select truck...</option>
+                                </select>
+                                <button class="btn btn-primary" onclick="handleTruckBreakdown()" style="width: 100%; padding: 10px; font-size: 11px; background: #9A6A68;">
+                                    Mark Breakdown
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Export & Actions Section -->
+                    <div class="content-section" id="exportSection" style="display: none;">
+                        <div class="section-title">ACTIONS & EXPORT</div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="downloadCurrentSolution()" style="padding: 10px 16px; font-size: 11px;">
+                                Download Solution CSV
+                            </button>
+                            <button class="btn btn-primary" onclick="saveRunDefault()" style="padding: 10px 16px; font-size: 11px;">
+                                Save Run
+                            </button>
+                            <button class="btn btn-secondary" onclick="exportToExcel()" style="padding: 10px 16px; font-size: 11px;">
+                                Export to Excel
+                            </button>
+                            <button class="btn btn-secondary" onclick="downloadMapAsImage()" style="padding: 10px 16px; font-size: 11px;">
+                                Download Map Image
+                            </button>
+                        </div>
+                    </div>
+                    </div>
                 </div>
+
+                <!-- Tab 2: Past Runs -->
+                <div id="runs-tab" class="tab-content">
+                    <div class="content-section" id="runsManager" style="width:100%; box-sizing:border-box; display:flex; flex-direction:column; padding:0;">
+                        <div style="padding:24px; border-bottom:1px solid var(--grid-line);"><div class="section-title">RUNS MANAGER</div></div>
+                        
+                        <!-- Selection Actions Bar -->
+                        <div style="padding: 6px 24px; background: #fafbfc; border-bottom: 1px solid #e8e9ea; display: none; align-items: center; gap: 16px; font-size: 9px;" id="comparisonControls">
+                            <span id="compareCounter" onclick="clearAllSelections()" style="font-size: 9px; color: #8a8f98; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none;" onmouseover="this.style.color='#5a6c7d'; this.style.textDecoration='underline'" onmouseout="this.style.color='#8a8f98'; this.style.textDecoration='none'" title="Click to deselect all">0 selected</span>
+                            <a onclick="compareSelectedRuns()" style="font-size: 9px; color: #5a6c7d; cursor: pointer; text-decoration: none; display: none; padding: 2px 0; border-bottom: 1px solid transparent;" id="compareBtn" onmouseover="this.style.borderBottom='1px solid #5a6c7d'" onmouseout="this.style.borderBottom='1px solid transparent'">
+                                Compare
+                            </a>
+                            <a onclick="deleteSelectedRuns()" style="font-size: 9px; color: #8B0000; cursor: pointer; text-decoration: none; padding: 2px 0; border-bottom: 1px solid transparent; font-weight: 500;" onmouseover="this.style.borderBottom='1px solid #8B0000'" onmouseout="this.style.borderBottom='1px solid transparent'">
+                                Delete
+                            </a>
+                        </div>
+                        
+                        <div id="runsTableContainer" style="width:100%; overflow:auto; flex:1; box-sizing:border-box;">
+                            <table id="runsTable" style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                                <thead>
+                                    <tr style="background: var(--secondary-bg);">
+                                        <th style="text-align:center; padding:12px; border-bottom:2px solid var(--border-color); width:40px;">
+                                            <input type="checkbox" id="selectAllRuns" onchange="toggleSelectAll()" style="cursor: pointer;">
+                                        </th>
+                                        <th class="sortable-header" data-sort="name" style="text-align:left; padding:12px; border-bottom:2px solid var(--border-color); width:200px; font-size:12px; font-weight:600; cursor:pointer; user-select:none;">
+                                            <div style="margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+                                                Name <span class="sort-indicator" style="font-size:10px; color:var(--text-muted);">△</span>
+                                            </div>
+                                            <input type="text" class="header-filter" data-filter="name" placeholder="Filter..." style="width:100%; padding:4px 6px; font-size:10px; border:1px solid var(--border-color); border-radius:3px; background:white; box-sizing:border-box;" onclick="event.stopPropagation();" oninput="applyFiltersAndSort()">
+                                        </th>
+                                        <th class="sortable-header" data-sort="run_id" style="text-align:left; padding:12px; border-bottom:2px solid var(--border-color); width:180px; font-size:12px; font-weight:600; cursor:pointer; user-select:none;">
+                                            <div style="margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+                                                Run ID <span class="sort-indicator" style="font-size:10px; color:var(--text-muted);">△</span>
+                                            </div>
+                                            <input type="text" class="header-filter" data-filter="run_id" placeholder="Filter..." style="width:100%; padding:4px 6px; font-size:10px; border:1px solid var(--border-color); border-radius:3px; background:white; box-sizing:border-box;" onclick="event.stopPropagation();" oninput="applyFiltersAndSort()">
+                                        </th>
+                                        <th class="sortable-header" data-sort="created" style="text-align:left; padding:12px; border-bottom:2px solid var(--border-color); width:180px; font-size:12px; font-weight:600; cursor:pointer; user-select:none;">
+                                            <div style="margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+                                                Created <span class="sort-indicator" style="font-size:10px; color:var(--text-muted);">△</span>
+                                            </div>
+                                            <input type="text" class="header-filter" data-filter="created" placeholder="Filter..." style="width:100%; padding:4px 6px; font-size:10px; border:1px solid var(--border-color); border-radius:3px; background:white; box-sizing:border-box;" onclick="event.stopPropagation();" oninput="applyFiltersAndSort()">
+                                        </th>
+                                        <th class="sortable-header" data-sort="solver" style="text-align:left; padding:12px; border-bottom:2px solid var(--border-color); width:150px; font-size:12px; font-weight:600; cursor:pointer; user-select:none;">
+                                            Solver <span class="sort-indicator" style="font-size:10px; color:var(--text-muted); margin-left:4px;">△</span>
+                                        </th>
+                                        <th style="text-align:center; padding:12px; border-bottom:2px solid var(--border-color); width:280px; font-size:12px; font-weight:600;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="runsTableBody"></tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Comparison Results -->
+                        <div id="comparisonResults" style="display: none; margin-top: 24px; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; margin:24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <div style="font-size: 13px; font-weight: 600;">Comparison Results</div>
+                                <button class="btn btn-secondary" onclick="closeComparison()" style="padding: 4px 12px; font-size: 10px;">Close</button>
+                            </div>
+                            <div id="comparisonContent" style="overflow-x: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Route Details Modal -->
+    <div class="modal" id="routeDetailsModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-title">Route Details</div>
+            <div id="routeDetailsContent" style="max-height: 400px; overflow-y: auto;"></div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeRouteDetails()" style="padding: 8px 16px; font-size: 11px;">
+                    Close
+                </button>
             </div>
         </div>
     </div>
@@ -758,6 +1252,38 @@
     <script>
         let vendors = [];
         let csvFilepath = null;
+        const API_BASE = window.location.origin;
+        
+        // Debug logging
+        const debugLogs = [];
+        const originalLog = console.log;
+        
+        function addDebugLog(msg) {
+            debugLogs.push(msg);
+            if (debugLogs.length > 20) debugLogs.shift();
+            const panel = document.getElementById('debugPanel');
+            const output = document.getElementById('debugOutput');
+            if (output) {
+                output.innerHTML = debugLogs.map(l => '<div>' + l + '</div>').join('');
+            }
+            originalLog('[DEBUG]', msg);
+        }
+        
+        // Override console.log for tracking
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addDebugLog(args.join(' '));
+        }
+        let currentSolutionData = null;
+        let operationHistory = [];
+        let historyIndex = -1;
+        let allRuns = [];  // Store all runs for filtering
+        let sortState = {  // Track sort state per column
+            'name': null,      // null, 'asc', 'desc'
+            'run_id': null,
+            'created': null,
+            'solver': null
+        };
 
         // File Upload Handler
         document.getElementById('csvFile').addEventListener('change', handleFileUpload);
@@ -790,6 +1316,31 @@
             }
         });
 
+        // Add sortable header listeners
+        function initSortableHeaders() {
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.getAttribute('data-sort');
+                    handleHeaderSort(column);
+                });
+                // Add hover effect
+                header.addEventListener('mouseenter', function() {
+                    this.style.background = 'rgba(0, 0, 0, 0.03)';
+                });
+                header.addEventListener('mouseleave', function() {
+                    this.style.background = '';
+                });
+            });
+        }
+
+        // Trigger file input
+        function triggerFileInput() {
+            const input = document.getElementById('csvFile');
+            if (input) {
+                input.click();
+            }
+        }
+
         async function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -810,11 +1361,24 @@
                     csvFilepath = data.filepath;
                     renderVendorList();
                     document.getElementById('optimizeBtn').disabled = false;
+                    
+                    // Update upload zone to show file uploaded
+                    const uploadLabel = document.querySelector('.upload-label');
+                    const uploadHint = document.querySelector('.upload-hint');
+                    uploadLabel.textContent = '✓ File Uploaded';
+                    uploadHint.textContent = file.name;
+                    uploadLabel.style.color = 'var(--accent-success)';
+                    
+                    // Update data summary
+                    updateDataSummary();
                 } else {
                     alert('Error: ' + data.error);
                 }
             } catch (error) {
                 alert('Upload failed: ' + error.message);
+            } finally {
+                // Reset the input to allow re-uploading the same file
+                event.target.value = '';
             }
         }
 
@@ -834,9 +1398,372 @@
             `;
         }
 
+        // Toggle sidebar visibility
+        function toggleSidebar() {
+            const mainLayout = document.querySelector('.main-layout');
+            mainLayout.classList.toggle('sidebar-hidden');
+        }
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab and activate button
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Find and activate the corresponding tab button
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(btn => {
+                if (btn.textContent.includes('Optimizer') && tabName === 'optimizer') {
+                    btn.classList.add('active');
+                } else if (btn.textContent.includes('Saved Runs') && tabName === 'runs') {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Remove sidebar on runs tab, restore on optimizer tab
+            const sidebar = document.querySelector('.sidebar');
+            const mainLayout = document.querySelector('.main-layout');
+            if (tabName === 'runs') {
+                // Store the sidebar before removing it (if present)
+                if (sidebar) {
+                    window.sidebarBackup = sidebar.cloneNode(true);
+                    sidebar.remove();
+                }
+                // Adjust grid to full width
+                if (mainLayout) mainLayout.style.gridTemplateColumns = '1fr';
+                // Always refresh runs when opening Saved Runs tab
+                fetchRuns();
+                // Initialize sortable headers after a short delay to ensure DOM is ready
+                setTimeout(() => initSortableHeaders(), 100);
+            } else {
+                // Restore sidebar if it was removed
+                if (!document.querySelector('.sidebar') && window.sidebarBackup) {
+                    const mainLayout = document.querySelector('.main-layout');
+                    if (mainLayout) {
+                        mainLayout.insertBefore(window.sidebarBackup, mainLayout.firstChild);
+                        // Restore original grid layout
+                        mainLayout.style.gridTemplateColumns = '320px 1fr';
+                    }
+                }
+            }
+        }
+
+        // Runs fetching and rendering
+        async function fetchRuns() {
+            try {
+                const ts = new Date().toLocaleTimeString();
+                const resp = await fetch(`${API_BASE}/api/runs`);
+                const json = await resp.json();
+                originalLog(`[${ts}] Fetched runs:`, json);
+                originalLog(`[${ts}] Success flag:`, json.success);
+                originalLog(`[${ts}] Runs array length:`, json.runs ? json.runs.length : 'undefined');
+                if (json.success !== false && json.runs) {
+                    originalLog(`[${ts}] Rendering runs, count:`, (json.runs || []).length);
+                    allRuns = json.runs;  // Store all runs
+                    applyFiltersAndSort();  // Apply any active filters
+                    populatePastRunsDropdown(json.runs);
+                } else {
+                    originalLog(`[${ts}] API returned invalid response:`, json);
+                }
+            } catch (e) {
+                originalLog('Failed to fetch runs', e.message);
+            }
+        }
+
+        function populatePastRunsDropdown(runs) {
+            const select = document.getElementById('pastRunSelect');
+            if (!select) return;
+            
+            // Keep the default option
+            select.innerHTML = '<option value="">-- Select a past run --</option>';
+            
+            if (!runs || runs.length === 0) return;
+            
+            runs.forEach(r => {
+                const option = document.createElement('option');
+                option.value = r.run_id;
+                const name = r.name || 'Unnamed Run';
+                const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '';
+                option.textContent = `${name} (${date})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadPastRunData() {
+            const select = document.getElementById('pastRunSelect');
+            const runId = select.value;
+            
+            if (!runId) return;
+            
+            console.log('Loading past run:', runId);
+            
+            try {
+                // Download and parse the input CSV directly
+                const csvUrl = `${API_BASE}/api/runs/download-input/${runId}`;
+                console.log('Fetching CSV from:', csvUrl);
+                
+                const csvResp = await fetch(csvUrl);
+                console.log('CSV response status:', csvResp.status);
+                console.log('CSV response ok:', csvResp.ok);
+                
+                if (!csvResp.ok) {
+                    const errorText = await csvResp.text();
+                    console.error('CSV download error response:', errorText);
+                    throw new Error(`Failed to download CSV (status ${csvResp.status}): ${errorText}`);
+                }
+                
+                const csvBlob = await csvResp.blob();
+                const csvText = await csvBlob.text();
+                console.log('CSV text length:', csvText.length);
+                console.log('First 200 chars:', csvText.substring(0, 200));
+                
+                // Parse CSV and populate vendors
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: false,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        console.log('Papa.parse complete, raw rows:', results.data.length);
+                        
+                        // Filter out empty rows
+                        vendors = results.data.filter(row => {
+                            return row && Object.keys(row).some(key => row[key] && row[key].toString().trim() !== '');
+                        });
+                        
+                        console.log('Filtered vendors count:', vendors.length);
+                        console.log('Global vendors variable:', window.vendors);
+                        
+                        // Use the actual path from the run directory
+                        csvFilepath = `results/runs/${runId}/input.csv`;
+                        renderVendorList();
+                        
+                        // Update upload zone to show loaded run
+                        const uploadLabel = document.querySelector('.upload-label');
+                        const uploadHint = document.querySelector('.upload-hint');
+                        if (uploadLabel) {
+                            uploadLabel.textContent = '✓ Loaded from Past Run';
+                            uploadHint.textContent = `${vendors.length} vendors`;
+                            uploadLabel.style.color = 'var(--accent-success)';
+                        }
+                        
+                        // Update data summary
+                        updateDataSummary();
+                        
+                        // Enable optimize button
+                        const optimizeBtn = document.getElementById('optimizeBtn');
+                        if (optimizeBtn) {
+                            optimizeBtn.disabled = false;
+                            console.log('Optimize button enabled');
+                        }
+                    },
+                    error: function(error) {
+                        console.error('CSV parse error:', error);
+                        alert('Failed to parse CSV from past run: ' + error.message);
+                    }
+                });
+                
+            } catch (e) {
+                console.error('Failed to load past run data', e);
+                alert('Failed to load past run data: ' + e.message);
+            }
+        }
+
+        function renderRunsTable(runs) {
+            try {
+                const tbody = document.getElementById('runsTableBody');
+                console.log('renderRunsTable called with', runs ? runs.length : 0, 'runs');
+                console.log('tbody element:', tbody);
+                
+                if (!tbody) {
+                    console.error('ERROR: runsTableBody element not found!');
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                if (!runs || runs.length === 0) {
+                    console.log('No runs to display');
+                    tbody.innerHTML = '<tr><td colspan="6" style="padding:16px; text-align:center; color:#6B6560; font-size:13px;">No runs saved yet</td></tr>';
+                    return;
+                }
+                console.log('Adding', runs.length, 'rows to table');
+                runs.forEach((r, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--grid-line)';
+                    const created = r.created_at ? new Date(r.created_at).toLocaleString() : '';
+                    const solver = r.solver_type || '';
+                    const runId = r.run_id || '';
+                    const name = r.name || '(unnamed)';
+                    tr.innerHTML = `
+                        <td style="padding:12px; text-align:center; border-bottom:1px solid var(--grid-line); width:40px; overflow:hidden;">
+                            <input type="checkbox" class="run-checkbox" data-run-id="${runId}" onchange="toggleRunSelection(this, '${runId}')" style="cursor: pointer;">
+                        </td>
+                        <td style="padding:12px; border-bottom:1px solid var(--grid-line); width:200px; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</td>
+                        <td style="padding:12px; border-bottom:1px solid var(--grid-line); width:180px; font-size:11px; font-family:monospace; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${runId}</td>
+                        <td style="padding:12px; border-bottom:1px solid var(--grid-line); width:180px; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${created}</td>
+                        <td style="padding:12px; border-bottom:1px solid var(--grid-line); width:150px; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${solver}</td>
+                        <td style="padding:12px; border-bottom:1px solid var(--grid-line); width:320px; text-align:center; display:flex; gap:6px; justify-content:space-around; align-items:center;">
+                            <button class="btn btn-primary" style="padding:6px 10px; flex:1; font-size:9px; white-space:nowrap;" onclick="viewRunMap('${runId}')">View Map</button>
+                            <button class="btn btn-primary" style="padding:6px 10px; flex:1; font-size:9px; white-space:nowrap;" onclick="downloadRunInput('${runId}')">Input Data CSV</button>
+                            <button class="btn btn-primary" style="padding:6px 10px; flex:1; font-size:9px; white-space:nowrap;" onclick="viewRunSolution('${runId}')">Route Solution CSV</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                    if (idx < 3) console.log('Row', idx+1, ':', name);
+                });
+                console.log('Table rendering complete, total rows:', tbody.children.length);
+            } catch (e) {
+                console.error('ERROR in renderRunsTable:', e.message, e.stack);
+            }
+        }
+
+        function refreshRuns() { fetchRuns(); }
+
+        async function viewRunMap(runId) {
+            // Check if map exists first
+            const url = `${API_BASE}/results/runs/${runId}/map.html`;
+            console.log('=== VIEW MAP DEBUG ===');
+            console.log('Checking map at URL:', url);
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                console.log('Map HEAD response status:', response.status);
+                if (response.ok) {
+                    console.log('Map exists, opening...');
+                    window.open(url, '_blank');
+                } else {
+                    console.error('Map not found at:', url);
+                    alert('Map not available for this run. The run may have been created without generating a map.');
+                }
+            } catch (e) {
+                console.error('Error checking map:', e);
+                alert('Map not available for this run.');
+            }
+        }
+
+        function downloadRunInput(runId) {
+            const url = `${API_BASE}/api/runs/download-input/${runId}`;
+            window.open(url, '_blank');
+        }
+
+        async function viewRunSolution(runId) {
+            try {
+                // Load the run data and input CSV
+                const [routeResponse, csvResponse] = await Promise.all([
+                    fetch(`${API_BASE}/api/runs/load`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ run_id: runId })
+                    }),
+                    fetch(`${API_BASE}/api/runs/download-input/${runId}`)
+                ]);
+                
+                if (!routeResponse.ok || !csvResponse.ok) {
+                    throw new Error('Failed to load run data');
+                }
+                
+                const routeData = await routeResponse.json();
+                if (!routeData.success) {
+                    throw new Error(routeData.error || 'Unknown error');
+                }
+                
+                const routes = routeData.routes || [];
+                const runMetadata = routeData.run || {};
+                
+                // Parse the input CSV
+                const csvText = await csvResponse.text();
+                const vendorData = await new Promise((resolve, reject) => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        dynamicTyping: false,
+                        skipEmptyLines: true,
+                        complete: (results) => resolve(results.data),
+                        error: (error) => reject(error)
+                    });
+                });
+                
+                // Create vendor lookup by ID (row index + 1)
+                const vendorMap = {};
+                vendorData.forEach((row, idx) => {
+                    vendorMap[idx + 1] = row;
+                });
+                
+                // Create detailed CSV content
+                let csvContent = 'Route Number,Stop Sequence,Stop Type,Vendor ID,Vendor Name,Vendor City,Vendor Address,Recipient Name,Recipient City,Recipient Address,Cargo Weight (kg),Cargo Volume (m³),Requested Delivery Date,Requested Loading Date\n';
+                
+                routes.forEach((route, routeIdx) => {
+                    route.forEach((nodeId, stopIdx) => {
+                        if (nodeId === 0) {
+                            // Depot
+                            csvContent += `${routeIdx + 1},${stopIdx + 1},Depot,0,Depot,,,,,,,,,\n`;
+                        } else {
+                            // Vendor stop
+                            const vendor = vendorMap[nodeId] || {};
+                            const vendorName = vendor['Vendor Name'] || vendor['vendor Name'] || 'N/A';
+                            const vendorCity = vendor['Vendor City'] || 'N/A';
+                            const vendorAddress = `${vendor['Vendor Street'] || ''} ${vendor['Vendor Postcode'] || ''}`.trim() || 'N/A';
+                            const recipientName = vendor['Recipient Name'] || 'N/A';
+                            const recipientCity = vendor['Recipient City'] || 'N/A';
+                            const recipientAddress = `${vendor['Recipient Street'] || ''} ${vendor['Recipient Postcode'] || ''}`.trim() || 'N/A';
+                            const weight = vendor['Vendor Gross Weight'] || vendor['Total Gross Weight'] || '0';
+                            const volume = vendor['Vendor Loading Meters'] || vendor['Calculated Loading Meters'] || vendor['Vendor Dimensions in m3'] || '0';
+                            const deliveryDate = vendor['Requested Delivery Date'] || vendor['Requested Delivery'] || 'N/A';
+                            const loadingDate = vendor['Requested Loading Date'] || vendor['Requested Loading'] || 'N/A';
+                            
+                            csvContent += `${routeIdx + 1},${stopIdx + 1},Pickup,${nodeId},"${vendorName}","${vendorCity}","${vendorAddress}","${recipientName}","${recipientCity}","${recipientAddress}",${weight},${volume},"${deliveryDate}","${loadingDate}"\n`;
+                        }
+                    });
+                });
+                
+                // Create and download CSV file
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${runId}_solution.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (e) {
+                console.error('Error downloading solution:', e);
+                alert('Failed to download solution: ' + e.message);
+            }
+        }
+
+        async function rerun(runId) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/runs/rerun`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ run_id: runId, parameters: {} })
+                });
+                const json = await resp.json();
+                if (json.success) {
+                    alert(`Re-run completed. New run id: ${json.new_run_id || (json.result && json.result.run_id) || 'unknown'}`);
+                    fetchRuns();
+                } else {
+                    alert('Re-run failed: ' + (json.error || 'unknown error'));
+                }
+            } catch (e) {
+                alert('Re-run error: ' + e);
+            }
+        }
+
         async function runOptimization() {
+            console.log('runOptimization called, vendors.length:', vendors.length);
+            console.log('vendors array:', vendors);
+            
             if (vendors.length === 0) {
                 alert('No data loaded');
+                return;
+            }
+
+            if (!validateParameters()) {
+                alert('Please fix parameter errors before optimizing');
                 return;
             }
 
@@ -872,6 +1799,11 @@
 
                 const data = await response.json();
                 
+                console.log('=== OPTIMIZATION COMPLETE ===');
+                console.log('Optimization response:', data);
+                console.log('Map URL:', data.map_url);
+                console.log('Run ID:', data.run_id);
+                
                 if (data.success) {
                     displayResults(data);
                 } else {
@@ -886,7 +1818,28 @@
         }
 
         function displayResults(data) {
+            console.log('=== DISPLAY RESULTS ===');
+            console.log('Displaying results with data:', data);
+            console.log('Map URL in data:', data.map_url);
+            
             document.getElementById('resultsContainer').classList.add('show');
+            
+            // Store current solution
+            currentSolutionData = data;
+            
+            // Save initial state to history
+            operationHistory = [JSON.parse(JSON.stringify(data))];
+            historyIndex = 0;
+            updateHistoryButtons();
+            
+            // Show export and route operations sections
+            document.getElementById('exportSection').style.display = 'block';
+            document.getElementById('routeOpsSection').style.display = 'block';
+            
+            // Populate truck dropdown with number of routes
+            if (data.statistics && data.statistics.num_routes) {
+                populateTruckDropdown(data.statistics.num_routes);
+            }
 
             // Geocoding warnings
             const warningsDiv = document.getElementById('geocodeWarnings');
@@ -929,7 +1882,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">TOTAL LOADING</div>
-                    <div class="stat-value">${stats.total_loading.toLocaleString()}<span class="stat-unit">m³</span></div>
+                    <div class="stat-value">${stats.total_loading.toLocaleString()}<span class="stat-unit">m</span></div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">SOLVING TIME</div>
@@ -1010,14 +1963,14 @@
                             if (separator && !mapDoc.querySelector('.base-layer-toggle')) {
                                 const toggleButton = mapDoc.createElement('div');
                                 toggleButton.className = 'base-layer-toggle';
-                                toggleButton.innerHTML = '<span style="cursor: pointer; padding: 4px 8px; display: inline-block; font-size: 11px; color: #666; user-select: none;">▶ Map Styles</span>';
+                                toggleButton.innerHTML = '<span style="cursor: pointer; padding: 4px 8px; display: inline-block; font-size: 11px; color: #666; user-select: none;"> Map Styles</span>';
                                 toggleButton.style.marginBottom = '6px';
                                 
                                 let isExpanded = false;
                                 toggleButton.addEventListener('click', function() {
                                     isExpanded = !isExpanded;
                                     baseLayersSection.style.maxHeight = isExpanded ? '200px' : '0';
-                                    toggleButton.querySelector('span').innerHTML = isExpanded ? '▼ Map Styles' : '▶ Map Styles';
+                                    toggleButton.querySelector('span').innerHTML = isExpanded ? ' Map Styles' : ' Map Styles';
                                 });
                                 
                                 separator.parentNode.insertBefore(toggleButton, separator);
@@ -1062,7 +2015,7 @@
                                 </div>
                                 <div class="metric-row">
                                     <span class="metric-label">LOADING</span>
-                                    <span class="metric-value">${route.loading.toLocaleString()} m³</span>
+                                    <span class="metric-value">${route.loading.toLocaleString()} m</span>
                                 </div>
                             </div>
                         </div>
@@ -1071,8 +2024,613 @@
             `;
         }
 
+        // Route Operations Functions
+        async function addDeliveryToRoute() {
+            const vendorInput = document.getElementById('addDeliveryVendor').value.trim();
+            if (!vendorInput) {
+                alert('Please enter a vendor name or ID');
+                return;
+            }
+
+            // Save state before operation
+            if (currentSolutionData) {
+                saveStateToHistory();
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/route/add-stop-state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vendor_name: vendorInput })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✓ Delivery added to ${data.message}`);
+                    document.getElementById('addDeliveryVendor').value = '';
+                    // Refresh the current view
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to add delivery'));
+                }
+            } catch (e) {
+                alert('Failed to add delivery: ' + e.message);
+            }
+        }
+
+        async function removeDeliveryFromRoute() {
+            const vendorInput = document.getElementById('removeDeliveryVendor').value.trim();
+            if (!vendorInput) {
+                alert('Please enter a vendor name or ID');
+                return;
+            }
+
+            // Save state before operation
+            if (currentSolutionData) {
+                saveStateToHistory();
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/route/remove-stop-state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vendor_name: vendorInput })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✓ Delivery removed from route ${data.route_index}`);
+                    document.getElementById('removeDeliveryVendor').value = '';
+                    // Refresh the current view
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to remove delivery'));
+                }
+            } catch (e) {
+                alert('Failed to remove delivery: ' + e.message);
+            }
+        }
+
+        async function handleTruckBreakdown() {
+            const truckSelect = document.getElementById('breakdownTruck');
+            const routeIndex = truckSelect.value;
+            
+            if (!routeIndex) {
+                alert('Please select a truck');
+                return;
+            }
+
+            if (!confirm(`Mark truck (Route ${routeIndex}) as broken down? This will redistribute its deliveries.`)) {
+                return;
+            }
+
+            // Save state before operation
+            if (currentSolutionData) {
+                saveStateToHistory();
+            }
+
+            try {
+                // For now, we'll remove all stops from this route
+                // In a full implementation, you'd have a dedicated endpoint
+                alert('Truck breakdown feature: Redistributing deliveries from Route ' + routeIndex);
+                // TODO: Implement backend endpoint for truck breakdown redistribution
+            } catch (e) {
+                alert('Failed to handle breakdown: ' + e.message);
+            }
+        }
+
+        function populateTruckDropdown(numRoutes) {
+            const select = document.getElementById('breakdownTruck');
+            select.innerHTML = '<option value="">Select truck...</option>';
+            for (let i = 1; i <= numRoutes; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Route ${i}`;
+                select.appendChild(option);
+            }
+        }
+
+        // Data Summary and Clear Functions
+        function updateDataSummary() {
+            const summary = document.getElementById('dataSummary');
+            const actions = document.getElementById('dataActions');
+            
+            if (vendors.length === 0) {
+                summary.classList.remove('show');
+                actions.style.display = 'none';
+                return;
+            }
+
+            let totalWeight = 0;
+            let totalVolume = 0;
+            
+            vendors.forEach(v => {
+                // Try both backend format (weight, volume) and CSV format
+                const weight = parseFloat(v.weight || v['Vendor Gross Weight'] || v['Total Gross Weight'] || 0);
+                const volume = parseFloat(v.volume || v['Vendor Loading Meters'] || v['Calculated Loading Meters'] || v['Vendor Dimensions in m3'] || 0);
+                totalWeight += weight;
+                totalVolume += volume;
+            });
+
+            document.getElementById('summaryVendors').textContent = vendors.length;
+            document.getElementById('summaryWeight').textContent = `${(totalWeight / 1000).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1})} tons`;
+            document.getElementById('summaryVolume').textContent = `${totalVolume.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} m³`;
+            summary.classList.add('show');
+            actions.style.display = 'flex';
+        }
+
+        function clearData() {
+            if (!confirm('Clear all loaded data?')) return;
+            
+            vendors = [];
+            csvFilepath = null;
+            currentSolutionData = null;
+            
+            document.getElementById('csvFile').value = '';
+            document.getElementById('pastRunSelect').value = '';
+            document.querySelector('.upload-label').textContent = 'Upload New CSV';
+            document.querySelector('.upload-hint').textContent = 'Click to browse';
+            document.querySelector('.upload-label').style.color = '';
+            
+            document.getElementById('dataSummary').classList.remove('show');
+            document.getElementById('dataActions').style.display = 'none';
+            document.getElementById('resultsContainer').classList.remove('show');
+            document.getElementById('routeOpsSection').style.display = 'none';
+            document.getElementById('exportSection').style.display = 'none';
+            document.getElementById('optimizeBtn').disabled = true;
+            
+            renderVendorList();
+        }
+
+        // Export and Download Functions
+        function downloadCurrentSolution() {
+            if (!currentSolutionData) {
+                alert('No solution available to download');
+                return;
+            }
+            window.open(`${API_BASE}/api/download-solution`, '_blank');
+        }
+
+        async function saveRunDefault() {
+            if (!currentSolutionData) {
+                alert('No optimized solution to save. Please run optimization first.');
+                return;
+            }
+
+            // Prompt user for custom name
+            const defaultName = `Run ${new Date().toLocaleString()}`;
+            const customName = prompt('Enter a name for this run:', defaultName);
+            
+            // If user cancelled the prompt, return
+            if (customName === null) {
+                return;
+            }
+            
+            const name = customName.trim() || defaultName;
+            
+            console.log('=== SAVE RUN DEBUG ===');
+            console.log('Saving run with name:', name);
+            console.log('CSV filepath:', csvFilepath);
+            console.log('Current solution data:', currentSolutionData);
+            console.log('Map URL from solution:', currentSolutionData?.map_url);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/runs/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name,
+                        vendors: vendors,
+                        csv_filepath: csvFilepath
+                    })
+                });
+                const data = await response.json();
+                console.log('Save response:', data);
+                if (data.success) {
+                    console.log('Run saved successfully with ID:', data.run_id);
+                    await fetchRuns(); // refresh past runs dropdown and tables if open
+                    // Redirect to Saved Runs tab
+                    switchTab('runs');
+                } else {
+                    console.error('Save failed:', data.error);
+                    alert('Failed to save: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Save failed: ' + e.message);
+            }
+        }
+
+        async function exportToExcel() {
+            alert('Excel export functionality - would generate detailed route breakdown with times, distances, and capacities');
+            // TODO: Implement Excel export via backend endpoint
+        }
+
+        async function downloadMapAsImage() {
+            alert('Map image export - would capture the current map view as PNG');
+            // TODO: Implement map screenshot functionality
+        }
+
+        // Route Details Modal
+        function showRouteDetails(routeData) {
+            const modal = document.getElementById('routeDetailsModal');
+            const content = document.getElementById('routeDetailsContent');
+            
+            content.innerHTML = `
+                <div style="margin-bottom: 16px;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">Route ${routeData.route_id}</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">
+                        Distance: ${routeData.distance} km | 
+                        Cargo: ${routeData.cargo} kg | 
+                        Stops: ${routeData.stops || 0}
+                    </div>
+                </div>
+                <div style="font-size: 11px;">
+                    ${(routeData.vendors || []).map((v, i) => `
+                        <div style="padding: 8px; border-bottom: 1px solid var(--grid-line);">
+                            <strong>Stop ${i + 1}:</strong> ${v.name || v}<br>
+                            <span style="color: var(--text-muted);">Time: ${v.arrival_time || 'N/A'}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            modal.classList.add('show');
+        }
+
+        function closeRouteDetails() {
+            document.getElementById('routeDetailsModal').classList.remove('show');
+        }
+
+        // Undo/Redo Functions
+        function saveStateToHistory() {
+            // Remove any future states if we're not at the end
+            if (historyIndex < operationHistory.length - 1) {
+                operationHistory = operationHistory.slice(0, historyIndex + 1);
+            }
+            
+            operationHistory.push(JSON.parse(JSON.stringify(currentSolutionData)));
+            historyIndex++;
+            updateHistoryButtons();
+        }
+
+        function undoOperation() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                currentSolutionData = JSON.parse(JSON.stringify(operationHistory[historyIndex]));
+                refreshView();
+                updateHistoryButtons();
+            }
+        }
+
+        function redoOperation() {
+            if (historyIndex < operationHistory.length - 1) {
+                historyIndex++;
+                currentSolutionData = JSON.parse(JSON.stringify(operationHistory[historyIndex]));
+                refreshView();
+                updateHistoryButtons();
+            }
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('undoBtn').disabled = historyIndex <= 0;
+            document.getElementById('redoBtn').disabled = historyIndex >= operationHistory.length - 1;
+        }
+
+        function refreshView() {
+            if (currentSolutionData) {
+                displayResults(currentSolutionData);
+            }
+        }
+
+        // Parameter Validation
+        function validateParameters() {
+            let valid = true;
+            const startDepot = parseInt(document.getElementById('startingDepot').value);
+            const closeDepot = parseInt(document.getElementById('closingDepot').value);
+            
+            if (startDepot >= closeDepot) {
+                document.getElementById('startingDepot').classList.add('error');
+                document.getElementById('closingDepot').classList.add('error');
+                valid = false;
+            } else {
+                document.getElementById('startingDepot').classList.remove('error');
+                document.getElementById('closingDepot').classList.remove('error');
+            }
+            
+            return valid;
+        }
+
+        // Comparison Mode Functions
+        let selectedRunsForComparison = new Set();
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAllRuns').checked;
+            const checkboxes = document.querySelectorAll('.run-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll;
+                if (selectAll) {
+                    selectedRunsForComparison.add(cb.dataset.runId);
+                } else {
+                    selectedRunsForComparison.delete(cb.dataset.runId);
+                }
+            });
+            updateComparisonCounter();
+        }
+
+        function toggleRunSelection(checkbox, runId) {
+            if (checkbox.checked) {
+                selectedRunsForComparison.add(runId);
+            } else {
+                selectedRunsForComparison.delete(runId);
+                document.getElementById('selectAllRuns').checked = false;
+            }
+            updateComparisonCounter();
+        }
+
+        function clearAllSelections() {
+            selectedRunsForComparison.clear();
+            document.getElementById('selectAllRuns').checked = false;
+            document.querySelectorAll('.run-checkbox').forEach(cb => cb.checked = false);
+            updateComparisonCounter();
+        }
+
+        function updateComparisonCounter() {
+            const count = selectedRunsForComparison.size;
+            document.getElementById('compareCounter').textContent = `${count} selected`;
+            document.getElementById('comparisonControls').style.display = count > 0 ? 'flex' : 'none';
+            // Show compare button only when 2+ runs selected
+            const compareBtn = document.getElementById('compareBtn');
+            if (compareBtn) {
+                compareBtn.style.display = count >= 2 ? 'inline-block' : 'none';
+            }
+        }
+
+        async function deleteSelectedRuns() {
+            if (selectedRunsForComparison.size === 0) {
+                alert('Please select at least one run to delete');
+                return;
+            }
+
+            const count = selectedRunsForComparison.size;
+            if (!confirm(`Are you sure you want to delete ${count} run${count > 1 ? 's' : ''}? This cannot be undone.`)) {
+                return;
+            }
+
+            console.log('=== DELETE RUNS DEBUG ===');
+            console.log('Deleting runs:', Array.from(selectedRunsForComparison));
+
+            try {
+                const runIds = Array.from(selectedRunsForComparison);
+                const promises = runIds.map(async runId => {
+                    console.log(`Deleting run: ${runId}`);
+                    const response = await fetch(`${API_BASE}/api/runs/${runId}`, { method: 'DELETE' });
+                    console.log(`Delete response for ${runId}:`, response.status, response.statusText);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                        console.error(`Failed to delete ${runId}:`, errorData);
+                    }
+                    return response;
+                });
+                
+                const results = await Promise.all(promises);
+                const failed = results.filter(r => !r.ok);
+                
+                if (failed.length === 0) {
+                    console.log('All runs deleted successfully');
+                    selectedRunsForComparison.clear();
+                    document.getElementById('selectAllRuns').checked = false;
+                    await fetchRuns();
+                } else {
+                    console.error('Some deletes failed:', failed);
+                    alert(`Failed to delete ${failed.length} run(s). Check console for details.`);
+                }
+            } catch (e) {
+                console.error('Delete error:', e);
+                alert('Failed to delete runs: ' + e.message);
+            }
+        }
+
+        async function compareSelectedRuns() {
+            if (selectedRunsForComparison.size < 2) {
+                alert('Please select at least 2 runs to compare');
+                return;
+            }
+
+            try {
+                const runIds = Array.from(selectedRunsForComparison);
+                const response = await fetch(`${API_BASE}/api/runs/compare`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ run_ids: runIds })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayComparisonResults(data.comparison);
+                } else {
+                    alert('Error comparing runs: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                // Fallback: Display comparison using local data
+                displayComparisonFallback(Array.from(selectedRunsForComparison));
+            }
+        }
+
+        function displayComparisonResults(comparison) {
+            const content = document.getElementById('comparisonContent');
+            let html = '<table style="width:100%; border-collapse:collapse;">';
+            html += '<thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid var(--grid-line);">Metric</th>';
+            
+            comparison.forEach(run => {
+                html += `<th style="text-align:left; padding:8px; border-bottom:1px solid var(--grid-line);">${run.name || run.run_id}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Compare key metrics
+            const metrics = [
+                { key: 'num_routes', label: 'Number of Routes' },
+                { key: 'total_distance', label: 'Total Distance (km)' },
+                { key: 'total_time', label: 'Total Time (hours)' },
+                { key: 'vendors_routed', label: 'Vendors Routed' },
+                { key: 'solver', label: 'Solver Used' }
+            ];
+            
+            metrics.forEach(metric => {
+                html += `<tr><td style="padding:8px; border-bottom:1px solid var(--grid-line);">${metric.label}</td>`;
+                comparison.forEach(run => {
+                    const value = run.statistics?.[metric.key] || run[metric.key] || '-';
+                    html += `<td style="padding:8px; border-bottom:1px solid var(--grid-line);">${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            content.innerHTML = html;
+            document.getElementById('comparisonResults').style.display = 'block';
+        }
+
+        function displayComparisonFallback(runIds) {
+            // Simple fallback comparison
+            alert('Comparison feature requires backend support. Selected runs: ' + runIds.join(', '));
+        }
+
+        function closeComparison() {
+            document.getElementById('comparisonResults').style.display = 'none';
+        }
+
+        // Filter and Sort Functions
+        function applyFiltersAndSort() {
+            // Get filter values from header inputs
+            const filterName = (document.querySelector('[data-filter="name"]')?.value || '').toLowerCase();
+            const filterRunId = (document.querySelector('[data-filter="run_id"]')?.value || '').toLowerCase();
+            const filterCreated = (document.querySelector('[data-filter="created"]')?.value || '').toLowerCase();
+            
+            // Apply filters
+            let filtered = allRuns.filter(run => {
+                // Filter by name
+                if (filterName && !(run.name || '').toLowerCase().includes(filterName)) {
+                    return false;
+                }
+                // Filter by run ID
+                if (filterRunId && !(run.run_id || '').toLowerCase().includes(filterRunId)) {
+                    return false;
+                }
+                // Filter by created date
+                if (filterCreated) {
+                    const createdDate = run.created_at ? new Date(run.created_at).toLocaleString().toLowerCase() : '';
+                    if (!createdDate.includes(filterCreated)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+            
+            // Apply sorting based on sortState
+            filtered.sort((a, b) => {
+                // Find which column has an active sort
+                for (let [column, direction] of Object.entries(sortState)) {
+                    if (direction === null) continue;
+                    
+                    let aVal, bVal;
+                    if (column === 'name') {
+                        aVal = (a.name || '').toLowerCase();
+                        bVal = (b.name || '').toLowerCase();
+                        return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    } else if (column === 'run_id') {
+                        aVal = (a.run_id || '').toLowerCase();
+                        bVal = (b.run_id || '').toLowerCase();
+                        return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    } else if (column === 'created') {
+                        aVal = new Date(a.created_at || 0);
+                        bVal = new Date(b.created_at || 0);
+                        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                    } else if (column === 'solver') {
+                        aVal = (a.solver_type || '').toLowerCase();
+                        bVal = (b.solver_type || '').toLowerCase();
+                        return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    }
+                }
+                return 0;
+            });
+            
+            // Render filtered/sorted runs
+            renderRunsTable(filtered);
+            
+            // Update sort indicators on headers
+            updateSortIndicators();
+        }
+        
+        function updateSortIndicators() {
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                const column = header.getAttribute('data-sort');
+                const indicator = header.querySelector('.sort-indicator');
+                if (!indicator) return;
+                
+                const direction = sortState[column];
+                if (direction === 'asc') {
+                    indicator.textContent = '▲';
+                    indicator.style.color = 'var(--primary-blue)';
+                } else if (direction === 'desc') {
+                    indicator.textContent = '▼';
+                    indicator.style.color = 'var(--primary-blue)';
+                } else {
+                    indicator.textContent = '△';
+                    indicator.style.color = 'var(--text-muted)';
+                }
+            });
+        }
+        
+        function handleHeaderSort(column) {
+            // Reset all other columns to null
+            Object.keys(sortState).forEach(col => {
+                if (col !== column) sortState[col] = null;
+            });
+            
+            // Cycle: null -> asc -> desc -> null
+            if (sortState[column] === null) {
+                sortState[column] = 'asc';
+            } else if (sortState[column] === 'asc') {
+                sortState[column] = 'desc';
+            } else {
+                sortState[column] = null;
+            }
+            
+            applyFiltersAndSort();
+        }
+
+        function clearFilters() {
+            // Clear header filter inputs
+            document.querySelectorAll('.header-filter').forEach(input => {
+                input.value = '';
+            });
+            
+            // Reset all sort states
+            Object.keys(sortState).forEach(col => {
+                sortState[col] = null;
+            });
+            applyFiltersAndSort();
+        }
+
+        // Cost Estimation Functions
+        // Event listeners for keyboard
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeRouteDetails();
+                closeComparison();
+            }
+        });
+
         // Initial render
         renderVendorList();
+        
+        // Load past runs dropdown on page load
+        fetchRuns();
     </script>
+    
+    <!-- PapaParse CSV Parser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </body>
 </html>

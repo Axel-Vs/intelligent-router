@@ -2,17 +2,21 @@ import streamlit as st
 import pandas as pd
 import os
 import sys
+import json
 from datetime import datetime
 import tempfile
 import numpy as np
+import requests
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
 from model.graph_creator.graph_creator import Graph
 from model.optimizer.delivery_model import DeliveryOptimizer
+from model.optimizer.route_edit import insert_stop_best_position, remove_stop
 from model.utils.pre_processing import *
 from model.utils.project_utils import *
+from model.utils.run_storage import list_runs, load_run, save_run, generate_run_id
 
 st.set_page_config(
     page_title="🚚 Parcel Delivery Optimizer",
@@ -240,6 +244,34 @@ if optimize_button or st.session_state.get('optimization_complete', False):
                 st.session_state['solving_time'] = solving_time
                 st.session_state['num_vendors'] = num_vendors
                 st.session_state['solver_name'] = solver_name
+
+                # Persist matrices/routes for local edits
+                try:
+                    # Routes: convert dict -> list for convenience
+                    if isinstance(solution, dict):
+                        st.session_state['last_routes'] = list(solution.values())
+                    else:
+                        st.session_state['last_routes'] = solution
+
+                    # Distance matrix if available from network
+                    if hasattr(net, 'distance_matrix') and net.distance_matrix is not None:
+                        st.session_state['last_distance_matrix'] = net.distance_matrix
+
+                    # Capacity/volume from dataset (best-effort; depot=0)
+                    if 'Total Gross Weight' in vendors_df.columns:
+                        st.session_state['last_capacity_matrix'] = [0] + vendors_df['Total Gross Weight'].fillna(0).tolist()
+                    elif 'Vendor Gross Weight' in vendors_df.columns:
+                        st.session_state['last_capacity_matrix'] = [0] + vendors_df['Vendor Gross Weight'].fillna(0).tolist()
+
+                    vol_col = None
+                    for candidate in ['Calculated Loading Meters', 'Vendor Loading Meters', 'Vendor Dimensions in m3']:
+                        if candidate in vendors_df.columns:
+                            vol_col = candidate
+                            break
+                    if vol_col:
+                        st.session_state['last_loading_matrix'] = [0] + vendors_df[vol_col].fillna(0).tolist()
+                except Exception:
+                    pass
                 
             except Exception as e:
                 st.error(f"❌ Optimization failed: {str(e)}")
@@ -311,6 +343,196 @@ if st.session_state.get('optimization_complete', False):
             file_name=f"solution_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
         )
+
+    st.markdown("---")
+    st.markdown("### ✏️ Adjust Routes Locally (No Full Re-run)")
+    st.caption("Use this to add/remove stops without re-optimizing everything. Provide current routes and matrices; only the affected route changes.")
+
+    default_routes = (
+        st.session_state.get('last_routes')
+        or (list(st.session_state['solution'].values()) if st.session_state.get('solution') else [[0, 1, 0]])
+    )
+
+    default_distance = st.session_state.get('last_distance_matrix')
+    default_capacity = st.session_state.get('last_capacity_matrix')
+    default_loading = st.session_state.get('last_loading_matrix')
+    default_frozen = None
+    routes_text = st.text_area(
+        "Current routes (JSON array of routes)",
+        value=json.dumps(default_routes, indent=2),
+        height=150,
+    )
+
+    colA, colB = st.columns(2)
+    with colA:
+        distance_text = st.text_area(
+            "Distance matrix (2D JSON)",
+            height=120,
+            value=json.dumps(default_distance, indent=2) if default_distance is not None else "",
+            placeholder="[[0, 5, ...], [5, 0, ...], ...]",
+        )
+        capacity_text = st.text_area(
+            "Capacity (weight) per node (JSON array)",
+            height=80,
+            value=json.dumps(default_capacity, indent=2) if default_capacity is not None else "",
+            placeholder="[0, 1200, 800, ...]",
+        )
+    with colB:
+        loading_text = st.text_area(
+            "Volume per node (JSON array)",
+            height=80,
+            value=json.dumps(default_loading, indent=2) if default_loading is not None else "",
+            placeholder="[0, 3.4, 2.1, ...]",
+        )
+        frozen_text = st.text_area(
+            "Frozen prefix per route (JSON array, optional)",
+            height=80,
+            value=json.dumps(default_frozen, indent=2) if default_frozen is not None else "",
+            placeholder="[0, 0, 0]",
+        )
+
+    add_col, rem_col = st.columns(2)
+    with add_col:
+        new_stop = st.number_input("Stop to add (node index)", min_value=1, step=1, value=1)
+        allow_new_route = st.checkbox("Allow opening a new route", value=True)
+        add_btn = st.button("➕ Add Stop")
+    with rem_col:
+        remove_stop_id = st.number_input("Stop to remove (node index)", min_value=1, step=1, value=1)
+        rem_btn = st.button("➖ Remove Stop")
+
+    def _parse_json(label, text, required=True):
+        if not text.strip():
+            if required:
+                st.error(f"{label} is required")
+            return None
+        try:
+            return json.loads(text)
+        except Exception as e:
+            st.error(f"{label} parse error: {e}")
+            return None
+
+    if add_btn or rem_btn:
+        routes = _parse_json("Routes", routes_text)
+        distance_matrix = _parse_json("Distance matrix", distance_text)
+        capacity_matrix = _parse_json("Capacity (weight)", capacity_text)
+        loading_matrix = _parse_json("Volume", loading_text)
+        frozen_prefix = _parse_json("Frozen prefix", frozen_text, required=False)
+
+        if routes is None or distance_matrix is None or capacity_matrix is None or loading_matrix is None:
+            st.stop()
+
+        try:
+            max_capacity_kg = max(capacity_matrix) if len(capacity_matrix) > 0 else 0
+            max_ldms_vc = max(loading_matrix) if len(loading_matrix) > 0 else 0
+        except Exception:
+            st.error("Invalid capacity or volume arrays")
+            st.stop()
+
+        if add_btn:
+            result = insert_stop_best_position(
+                routes=routes,
+                new_stop=int(new_stop),
+                distance_matrix=distance_matrix,
+                capacity_matrix=capacity_matrix,
+                loading_matrix=loading_matrix,
+                max_capacity_kg=float(max_capacity_kg),
+                max_ldms_vc=float(max_ldms_vc),
+                frozen_prefix=frozen_prefix,
+                allow_new_route=allow_new_route,
+            )
+            if result.get("success"):
+                st.success(f"Stop inserted in route {result.get('route_index')} at position {result.get('position')}. Δdistance={result.get('delta_distance')}")
+                st.json(result.get("routes"))
+                # Update session state
+                st.session_state['last_routes'] = result.get("routes")
+            else:
+                st.error(result.get("message", "Insertion failed"))
+
+        if rem_btn:
+            result = remove_stop(routes=routes, stop=int(remove_stop_id))
+            if result.get("success"):
+                st.success(f"Stop removed from route {result.get('route_index')}")
+                st.json(result.get("routes"))
+                st.session_state['last_routes'] = result.get("routes")
+            else:
+                st.error(result.get("message", "Stop not found"))
+
+    st.markdown("---")
+    st.markdown("### 🗂️ Runs: Load and Save")
+    try:
+        runs = list_runs()
+        run_options = {f"{r.get('name','(unnamed)')} ({r.get('run_id')})": r.get('run_id') for r in runs}
+        selected_label = st.selectbox("Select a saved run", options=list(run_options.keys())) if run_options else None
+        if selected_label:
+            if st.button("📥 Load Selected Run"):
+                data = load_run(run_options[selected_label])
+                if data.get('success'):
+                    state = data['state']
+                    st.session_state['last_routes'] = state.get('routes')
+                    st.session_state['last_distance_matrix'] = state.get('distance_matrix')
+                    st.session_state['last_capacity_matrix'] = state.get('capacity_matrix')
+                    st.session_state['last_loading_matrix'] = state.get('loading_matrix')
+                    st.success(f"Loaded run {data['metadata'].get('name')} ({data['run_id']})")
+                else:
+                    st.error(data.get('error','Failed to load run'))
+
+            # Re-run from dataset using Flask endpoint
+            selected_run_id = run_options[selected_label]
+            colR1, colR2 = st.columns(2)
+            with colR1:
+                if st.button("🔁 Re-run Selected Run (Flask)"):
+                    try:
+                        params = {}
+                        api_url = os.environ.get('PARCEL_API_URL', 'http://localhost:8080')
+                        resp = requests.post(f"{api_url}/api/runs/rerun", json={
+                            'run_id': selected_run_id,
+                            'parameters': params,
+                        }, timeout=60)
+                        if resp.status_code == 200:
+                            payload = resp.json()
+                            new_run_id = payload.get('new_run_id') or (payload.get('result') or {}).get('run_id')
+                            if new_run_id:
+                                st.success(f"Re-run completed. New run id: {new_run_id}")
+                            else:
+                                st.success("Re-run completed.")
+                        else:
+                            st.error(f"Re-run failed: {resp.text}")
+                    except Exception as e:
+                        st.error(f"Re-run error: {e}")
+            with colR2:
+                if st.button("📄 Download Input with Status (CSV)"):
+                    try:
+                        api_url = os.environ.get('PARCEL_API_URL', 'http://localhost:8080')
+                        resp = requests.get(f"{api_url}/api/runs/download-input/{selected_run_id}", timeout=60)
+                        if resp.status_code == 200:
+                            st.download_button(
+                                label="⬇️ Save CSV",
+                                data=resp.content,
+                                file_name=f"input_with_status_{selected_run_id}.csv",
+                                mime="text/csv",
+                            )
+                        else:
+                            st.error(f"Download failed: {resp.text}")
+                    except Exception as e:
+                        st.error(f"Download error: {e}")
+
+        new_run_name = st.text_input("Save current state as new run (name)", value=f"Run {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        if st.button("💾 Save Run"):
+            current_state = {
+                'routes': st.session_state.get('last_routes'),
+                'distance_matrix': st.session_state.get('last_distance_matrix'),
+                'capacity_matrix': st.session_state.get('last_capacity_matrix'),
+                'loading_matrix': st.session_state.get('last_loading_matrix'),
+                'frozen_prefix': None,
+            }
+            run_id = generate_run_id('run')
+            res = save_run(run_id, new_run_name, current_state, {'created_at': datetime.now().isoformat()})
+            if res.get('success'):
+                st.success(f"Saved new run: {new_run_name} ({run_id})")
+            else:
+                st.error("Failed to save run")
+    except Exception as e:
+        st.error(f"Run management error: {e}")
     
     # Reset button
     if st.button("🔄 Start New Optimization"):

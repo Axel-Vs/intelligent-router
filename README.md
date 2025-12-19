@@ -16,9 +16,12 @@ An elegant, enterprise-grade AI-powered route optimization platform for vehicle 
 ## ✨ Features
 
 ### 🎨 Enterprise Web Interface
-- **Elegant Design System** - Refined light beige/bone color palette with black accents
-- **2-Column Layout** - Compact 320px sidebar with optimization results + interactive map visualization
-- **Intelligent Branding** - Deep navy "Intelligent Router" branding with enterprise badge
+- **Elegant 3-Tab Layout** - Modern black tab navigation with white active highlights
+  - **Optimizer Tab** - 320px sidebar with 12 parameters + interactive map visualization
+  - **Saved Runs Tab** - Complete optimization history with management tools
+  - **Route Visualization** - Full-screen maps for detailed route inspection
+- **Clickable Branding** - Click "Intelligent Router" title to quickly navigate to Optimizer tab
+- **Refined Design System** - Light beige/bone color palette (#FAFAF8) with black accents and deep navy branding
 - **Real-Time Optimization** - Web-based interface with live progress tracking and results
 - **Responsive Parameters** - 12 configurable network parameters in clean 2-column grid
 - **Compact Results Display** - Optimized stat cards showing routes, distance, cargo, volume, and solving time
@@ -42,6 +45,24 @@ An elegant, enterprise-grade AI-powered route optimization platform for vehicle 
 - **Performance Metrics** - Solving time, vehicle utilization, capacity percentages
 - **Real-World Routing** - Uses OSRM for accurate distance and travel time calculations
 - **Geocoding Support** - Automatic address-to-coordinate conversion with persistent caching
+
+### 💾 Saved Runs Management
+- **Run History** - Browse all past optimization runs with comparison table
+- **Three Action Buttons** per run:
+  - **View Map** - Open interactive map visualization in new tab
+  - **Input Data CSV** - Download original input dataset
+  - **Route Solution CSV** - Export detailed route solution (14 columns)
+- **Re-optimization** - Load any past run to adjust parameters and re-run optimization
+- **Delete Functionality** - Remove unwanted runs from history
+- **Selection Controls** - Checkboxes for future batch operations
+
+### 📄 Solution CSV Export
+Comprehensive route details with 14 columns per stop:
+- Route Number, Stop Sequence, Stop Type (pickup/delivery)
+- Vendor ID, Vendor Name, Vendor City, Vendor Address
+- Recipient Name, Recipient City, Recipient Address  
+- Cargo Weight (kg), Cargo Volume (m³)
+- Requested Delivery Date, Requested Loading Date
 
 ## 🎯 Key Capabilities
 
@@ -116,9 +137,9 @@ python app.py
 
 2. **Open your browser**
    - Navigate to `http://localhost:8080`
-   - You'll see the elegant Intelligent Router interface
+   - You'll see the elegant Intelligent Router interface with 3 tabs: **Optimizer**, **Saved Runs**, **Route Visualization**
 
-3. **Upload your dataset**
+3. **Upload your dataset** (Optimizer tab)
    - Click the upload area or drag-and-drop your CSV file
    - Supported format: vendor coordinates, cargo weight, loading volume
 
@@ -138,6 +159,14 @@ python app.py
    - **Left Panel**: Optimization results with routes, vendors, distance, cargo, volume, solving time
    - **Right Panel**: Interactive map with all routes visualized
    - **Route Control**: Toggle individual routes or use Select All/Deselect All
+
+7. **Manage saved runs** (Saved Runs tab)
+   - Browse all past optimization runs in comparison table
+   - **View Map**: Open interactive visualization in new tab
+   - **Input Data CSV**: Download original input dataset
+   - **Route Solution CSV**: Export detailed 14-column route solution
+   - **Re-optimize**: Load past run back to Optimizer to adjust parameters and re-run
+   - **Delete**: Remove unwanted runs from history
 
 ### Command Line Usage (Alternative)
 
@@ -176,6 +205,34 @@ vendor_latitude,vendor_longitude,recipient_latitude,recipient_longitude,vendor N
 37.7749,-122.4194,47.6062,-122.3321,Tech Company Inc.,San Francisco,94102,12438,31.5,2023-08-16 15:00:00
 29.7604,-95.3698,47.6062,-122.3321,Manufacturing Co.,Houston,77001,13005,22.1,2023-08-17 14:45:00
 ```
+
+### Solution CSV Export
+
+After optimization completes, download a comprehensive **Route Solution CSV** from the Saved Runs tab with 14 detailed columns per stop:
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `Route Number` | Vehicle/route identifier | 1 |
+| `Stop Sequence` | Order of stop in route | 1 |
+| `Stop Type` | Type of stop | pickup |
+| `Vendor ID` | Unique vendor identifier | vendor_123 |
+| `Vendor Name` | Vendor business name | Tech Company Inc. |
+| `Vendor City` | Vendor city | San Francisco |
+| `Vendor Address` | Full vendor address | 123 Main St, San Francisco, CA 94102 |
+| `Recipient Name` | Delivery destination name | Amazon Fulfillment Center |
+| `Recipient City` | Recipient city | Seattle |
+| `Recipient Address` | Full recipient address | 456 Warehouse Rd, Seattle, WA 98101 |
+| `Cargo Weight (kg)` | Weight of cargo at this stop | 12438 |
+| `Cargo Volume (m³)` | Volume of cargo at this stop | 31.5 |
+| `Requested Delivery Date` | Requested delivery time | 2023-08-16 15:00:00 |
+| `Requested Loading Date` | Requested pickup time | 2023-08-15 08:00:00 |
+
+**Use Cases:**
+- Detailed route planning and dispatch
+- Driver manifest generation
+- Loading dock scheduling
+- Delivery confirmation tracking
+- Performance analysis and reporting
 
 ## ⚙️ Configuration
 
@@ -474,6 +531,8 @@ The Intelligent Router features an elegant, enterprise-grade design system:
 - **Text Muted**: #9A9892 (Light gray for units and hints)
 - **Accent**: #000000 (Black for buttons and emphasis)
 - **Branding**: #1f2d3d (Deep navy for "Intelligent Router" title)
+- **Tab Navigation**: #000000 (Black background with white active highlights)
+- **Tab Active**: #FFFFFF (White text and bottom border for active tab)
 
 ### Typography
 - **Font Family**: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system fonts
@@ -489,10 +548,13 @@ The Intelligent Router features an elegant, enterprise-grade design system:
 - **Shadows**: Soft (0 2px 8px rgba(0,0,0,0.04))
 
 ### Components
+- **Tab Navigation**: Black background (#000000), white text for active tab, smooth transitions
 - **Buttons**: Black background, white text, 32px height, rounded 6px
+- **Action Buttons**: 320px width for longer labels (e.g., "Input Data CSV", "Route Solution CSV")
 - **Input Fields**: 32px height, white background, aligned rows
 - **Stat Cards**: 10px padding, 16px stat values, minimal design
 - **Parameters Grid**: 2 columns, aligned inputs, light gray units
+- **Saved Runs Table**: Comparison table with View Map, Input Data CSV, Route Solution CSV buttons per run
 
 ## 🐛 Troubleshooting
 

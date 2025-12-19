@@ -1414,7 +1414,7 @@ class DeliveryOptimizer:
                 # Depot marker - modern design with gradient
                 popup_html = f"""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; width: 280px;">
-                    <div style="background: #000000; 
+                    <div style="background: #6B6560; 
                                 color: white; padding: 24px; border-radius: 12px 12px 0 0; 
                                 margin: -15px -15px 15px -15px; text-align: center;">
                         <div style="font-size: 32px; margin-bottom: 10px;">🏭</div>
@@ -1427,7 +1427,7 @@ class DeliveryOptimizer:
                         <p style="margin: 12px 0; font-size: 13px; color: #5C5B56; line-height: 1.6;">
                             Central hub for all delivery operations
                         </p>
-                        <div style="background: #F8F7F4; padding: 12px; border-radius: 8px; margin-top: 14px; border-left: 3px solid #000000;">
+                        <div style="background: #F8F7F4; padding: 12px; border-radius: 8px; margin-top: 14px; border-left: 3px solid #6B6560;">
                             <p style="margin: 0; font-size: 12px; color: #5C5B56;">
                                 ✅ All vehicles end routes here
                             </p>

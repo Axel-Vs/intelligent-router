@@ -10,7 +10,7 @@ import numpy as np
 import os
 import sys
 from datetime import datetime
-import json
+import requests
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model.graph_creator.graph_creator import Graph
 from model.optimizer.delivery_model import DeliveryOptimizer
 from model.optimizer.alns_solver import ALNSSolver
+from model.optimizer.route_edit import insert_stop_best_position, remove_stop
+from model.utils.run_storage import save_run, list_runs, load_run, generate_run_id
 import json
 
 app = Flask(__name__, static_folder='web', static_url_path='')
@@ -26,6 +28,15 @@ CORS(app)
 # Create necessary directories
 os.makedirs('uploads', exist_ok=True)
 os.makedirs('results/optimization', exist_ok=True)
+
+# Simple in-memory state for last optimized plan
+APP_STATE = {
+    'routes': None,               # List[List[int]]
+    'distance_matrix': None,      # 2D list
+    'capacity_matrix': None,      # List[float], depot at index 0
+    'loading_matrix': None,       # List[float], depot at index 0
+    'frozen_prefix': None,        # List[int] per route (optional)
+}
 
 
 @app.route('/')
@@ -48,6 +59,9 @@ def upload_csv():
         # Save uploaded file
         filepath = os.path.join('uploads', f'vendors_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
         file.save(filepath)
+        
+        # Store in APP_STATE for later saves
+        APP_STATE['csv_filepath'] = filepath
         
         # Read and validate CSV
         df = pd.read_csv(filepath)
@@ -92,12 +106,22 @@ def optimize_routes():
         params = data.get('parameters', {})
         csv_filepath = data.get('csv_filepath', None)
         
-        if not vendors_data:
-            return jsonify({'error': 'No vendor data provided'}), 400
+        print(f"\n=== OPTIMIZE REQUEST DEBUG ===")
+        print(f"Number of vendors: {len(vendors_data)}")
+        print(f"CSV filepath: {csv_filepath}")
+        if vendors_data and len(vendors_data) > 0:
+            print(f"First vendor keys: {list(vendors_data[0].keys()) if isinstance(vendors_data[0], dict) else 'Not a dict'}")
+            print(f"First vendor sample: {vendors_data[0] if len(str(vendors_data[0])) < 200 else str(vendors_data[0])[:200]}")
+        print(f"=== END OPTIMIZE DEBUG ===\n")
+        
+        # Allow either vendors_data or a csv_filepath
+        if not vendors_data and not csv_filepath:
+            return jsonify({'error': 'No vendor data or csv_filepath provided'}), 400
         
         # Get other parameters
         use_metaheuristic = params.get('use_metaheuristic', True)
         max_vehicles = len(vendors_data)  # Always use all vendors as max vehicles
+        period = None  # Initialize period at top of function
         
         # Read the original CSV file to preserve all columns for geocoding
         if csv_filepath and os.path.exists(csv_filepath):
@@ -263,16 +287,23 @@ def optimize_routes():
             # Fallback: create DataFrame from JSON vendors_data (no geocoding needed)
             failed_geocodes = []
             df = pd.DataFrame(vendors_data)
-            df['vendor Name'] = df['name']
-            df['Vendor City'] = df['city']
-            df['vendor_latitude'] = df['latitude']
-            df['vendor_longitude'] = df['longitude']
-            df['recipient_latitude'] = df['recipient_latitude']
-            df['recipient_longitude'] = df['recipient_longitude']
-            df['Total Gross Weight'] = df['weight']
-            df['Calculated Loading Meters'] = df['volume']
-            df['Requested Delivery'] = df['delivery_date']
-            df['Requested Loading'] = df['delivery_date']
+            
+            # Map fields only if they don't already exist (fresh upload vs CSV reload)
+            if 'name' in df.columns and 'vendor Name' not in df.columns and 'Vendor Name' not in df.columns:
+                df['vendor Name'] = df['name']
+            if 'city' in df.columns and 'Vendor City' not in df.columns:
+                df['Vendor City'] = df['city']
+            if 'latitude' in df.columns and 'vendor_latitude' not in df.columns:
+                df['vendor_latitude'] = df['latitude']
+            if 'longitude' in df.columns and 'vendor_longitude' not in df.columns:
+                df['vendor_longitude'] = df['longitude']
+            if 'weight' in df.columns and 'Total Gross Weight' not in df.columns:
+                df['Total Gross Weight'] = df['weight']
+            if 'volume' in df.columns and 'Calculated Loading Meters' not in df.columns:
+                df['Calculated Loading Meters'] = df['volume']
+            if 'delivery_date' in df.columns and 'Requested Delivery' not in df.columns:
+                df['Requested Delivery'] = df['delivery_date']
+                df['Requested Loading'] = df['delivery_date']
             
             temp_csv = os.path.join('uploads', f'temp_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
             df.to_csv(temp_csv, index=False)
@@ -409,6 +440,9 @@ def optimize_routes():
         # Plot routes using the optimizer's built-in method
         _, route_stats = optimizer.plot_routes(x, y, show_plot=False, save_path=map_path)
         
+        # Store map_path in APP_STATE for manual saves
+        APP_STATE['map_path'] = map_path
+        
         # Extract statistics from route_stats returned by plot_routes
         num_vehicles_used = len(route_stats)
         total_distance = sum(stats['total_distance'] for stats in route_stats.values())
@@ -431,6 +465,82 @@ def optimize_routes():
                 'cargo': float(round(stats['total_cargo'], 0)),
                 'loading': float(round(stats['total_loading'], 2))
             })
+
+        # Cache plan state for subsequent local edits
+        try:
+            # Reconstruct simple routes as [0] + vendors + [0]
+            cached_routes = []
+            for vehicle_id in sorted(route_stats.keys()):
+                vendors_seq = route_stats[vehicle_id].get('vendors', [])
+                cached_routes.append([0] + vendors_seq + [0])
+
+            APP_STATE['routes'] = cached_routes
+            # Convert numpy arrays to plain lists and ensure depot padding
+            APP_STATE['capacity_matrix'] = [0.0] + list(np.array(capacity_matrix, dtype=float))
+            APP_STATE['loading_matrix'] = [0.0] + list(np.array(loading_matrix, dtype=float))
+            # Distance matrix from graph (convert to list of lists if numpy)
+            dm = net.distance_matrix
+            APP_STATE['distance_matrix'] = dm.tolist() if hasattr(dm, 'tolist') else dm
+            # Store time matrix (seconds)
+            APP_STATE['time_matrix'] = net.time_distance_matrix.tolist() if hasattr(net.time_distance_matrix, 'tolist') else net.time_distance_matrix
+            # Store capacities
+            APP_STATE['max_capacity_kg'] = float(network_params['max_weight'] * 1000.0)
+            APP_STATE['max_ldms_vc'] = float(network_params['max_ldms'])
+            # Store simple time windows based on requested delivery ±12h
+            APP_STATE['min_date'] = str(net.min_date) if hasattr(net, 'min_date') else str(period[0])
+            # Build earliest/latest arrays aligned to node index (0=depot placeholder)
+            earliest = [None] * (len(vendors_df) + 1)
+            latest = [None] * (len(vendors_df) + 1)
+            base = pd.to_datetime(net.min_date) if hasattr(net, 'min_date') else pd.to_datetime(period[0])
+            for node_id, row in vendors_df.iterrows():
+                ts = pd.to_datetime(row.get('Requested Delivery', None), errors='coerce')
+                if pd.isna(ts):
+                    continue
+                offset = (ts - base).total_seconds()
+                # window ±12h
+                earliest[node_id] = max(0.0, offset - 12 * 3600)
+                latest[node_id] = offset + 12 * 3600
+            APP_STATE['earliest'] = earliest
+            APP_STATE['latest'] = latest
+            # Record original used vendors for status tracking
+            orig_used = set()
+            for vehicle_id in sorted(route_stats.keys()):
+                vendors_seq = route_stats[vehicle_id].get('vendors', [])
+                for v in vendors_seq:
+                    orig_used.add(int(v))
+            APP_STATE['original_used_vendors'] = sorted(list(orig_used))
+            # Optional: reset frozen prefixes
+            APP_STATE['frozen_prefix'] = [0] * len(cached_routes)
+        except Exception as _:
+            pass
+
+        # Persist this run to disk for survival across restarts
+        run_id = None
+        try:
+            run_id = generate_run_id('run')
+            run_name = f"Run {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            metadata = {
+                'solver_type': solver_type,
+                'period': [str(period[0]), str(period[1])],
+                'num_vendors': int(len(vendors_data)),
+                'csv_filepath': csv_filepath,
+                'map_path': map_path,
+                'original_used_vendors': APP_STATE.get('original_used_vendors'),
+            }
+            save_run(
+                run_id=run_id,
+                name=run_name,
+                state={
+                    'routes': APP_STATE['routes'],
+                    'distance_matrix': APP_STATE['distance_matrix'],
+                    'capacity_matrix': APP_STATE['capacity_matrix'],
+                    'loading_matrix': APP_STATE['loading_matrix'],
+                    'frozen_prefix': APP_STATE['frozen_prefix'],
+                },
+                metadata=metadata,
+            )
+        except Exception as _:
+            pass
         
         return jsonify({
             'success': True,
@@ -445,7 +555,8 @@ def optimize_routes():
                 'solver_type': str(solver_type)
             },
             'routes': route_summaries,
-            'failed_geocodes': failed_geocodes
+            'failed_geocodes': failed_geocodes,
+            'run_id': run_id
         })
     
     except Exception as e:
@@ -459,6 +570,391 @@ def serve_map(filename):
     """Serve generated map files"""
     return send_from_directory('results/optimization', filename)
 
+@app.route('/results/runs/<run_id>/<path:filename>')
+def serve_run_file(run_id, filename):
+    """Serve artifacts saved per run (e.g., map.html, input.csv copies)."""
+    base = os.path.join('results', 'runs', run_id)
+    return send_from_directory(base, filename)
+
+
+@app.route('/api/route/add-stop', methods=['POST'])
+def add_stop_to_plan():
+    """Insert a new stop into existing routes without full re-optimization.
+
+    Expects JSON payload with:
+    - routes: list of routes (each route is list of ints, depot=0)
+    - new_stop: int index to insert
+    - distance_matrix: 2D list (km)
+    - capacity_matrix: list of weights per node
+    - loading_matrix: list of volumes per node
+    - max_capacity_kg: vehicle capacity (kg)
+    - max_ldms_vc: vehicle volume capacity
+    - frozen_prefix (optional): list of ints per route indicating immutable prefix length
+    - allow_new_route (optional): bool
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        required = [
+            'routes', 'new_stop', 'distance_matrix', 'capacity_matrix',
+            'loading_matrix', 'max_capacity_kg', 'max_ldms_vc'
+        ]
+        missing = [k for k in required if k not in payload]
+        if missing:
+            return jsonify({'success': False, 'error': f'Missing fields: {missing}'}), 400
+
+        routes = payload['routes']
+        new_stop = int(payload['new_stop'])
+        distance_matrix = payload['distance_matrix']
+        capacity_matrix = payload['capacity_matrix']
+        loading_matrix = payload['loading_matrix']
+        max_capacity_kg = float(payload['max_capacity_kg'])
+        max_ldms_vc = float(payload['max_ldms_vc'])
+        frozen_prefix = payload.get('frozen_prefix')
+        allow_new_route = bool(payload.get('allow_new_route', True))
+
+        result = insert_stop_best_position(
+            routes=routes,
+            new_stop=new_stop,
+            distance_matrix=distance_matrix,
+            capacity_matrix=capacity_matrix,
+            loading_matrix=loading_matrix,
+            max_capacity_kg=max_capacity_kg,
+            max_ldms_vc=max_ldms_vc,
+            frozen_prefix=frozen_prefix,
+            allow_new_route=allow_new_route,
+        )
+
+        status = 200 if result.get('success') else 400
+        return jsonify(result), status
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/route/remove-stop', methods=['POST'])
+def remove_stop_from_plan():
+    """Remove a stop from routes without full re-optimization.
+
+    Expects JSON payload with:
+    - routes: list of routes
+    - stop: int index to remove
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        if 'routes' not in payload or 'stop' not in payload:
+            return jsonify({'success': False, 'error': 'Missing routes or stop'}), 400
+
+        routes = payload['routes']
+        stop = int(payload['stop'])
+        result = remove_stop(routes=routes, stop=stop)
+        status = 200 if result.get('success') else 404
+        return jsonify(result), status
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/route/add-stop-state', methods=['POST'])
+def add_stop_using_state():
+    """Insert a stop using cached plan state (no matrices required).
+
+    JSON payload:
+    - new_stop: int node index (vendor node id)
+    - frozen_prefix (optional): list[int]
+    - allow_new_route (optional): bool
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        if APP_STATE['routes'] is None or APP_STATE['distance_matrix'] is None:
+            return jsonify({'success': False, 'error': 'No cached plan. Run /api/optimize first.'}), 400
+
+        new_stop = int(payload.get('new_stop', -1))
+        if new_stop < 1:
+            return jsonify({'success': False, 'error': 'Invalid new_stop'}), 400
+
+        frozen_prefix = payload.get('frozen_prefix', APP_STATE.get('frozen_prefix'))
+        allow_new_route = bool(payload.get('allow_new_route', True))
+
+        result = insert_stop_best_position(
+            routes=APP_STATE['routes'],
+            new_stop=new_stop,
+            distance_matrix=APP_STATE['distance_matrix'],
+            capacity_matrix=APP_STATE['capacity_matrix'],
+            loading_matrix=APP_STATE['loading_matrix'],
+            max_capacity_kg=APP_STATE.get('max_capacity_kg', 0.0),
+            max_ldms_vc=APP_STATE.get('max_ldms_vc', 0.0),
+            frozen_prefix=frozen_prefix,
+            allow_new_route=allow_new_route,
+            time_matrix=APP_STATE.get('time_matrix'),
+            earliest=APP_STATE.get('earliest'),
+            latest=APP_STATE.get('latest'),
+            start_time_seconds=0.0,
+        )
+
+        if result.get('success'):
+            APP_STATE['routes'] = result['routes']
+            # Update statuses compared to original
+            orig_set = set(APP_STATE.get('original_used_vendors') or [])
+            cur_set = set()
+            for r in APP_STATE['routes']:
+                for n in r:
+                    if n != 0:
+                        cur_set.add(int(n))
+            APP_STATE['statuses'] = {int(n): ('original' if n in orig_set else 'added') for n in cur_set}
+            return jsonify(result), 200
+        return jsonify(result), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/route/remove-stop-state', methods=['POST'])
+def remove_stop_using_state():
+    """Remove a stop using cached plan state (no matrices required).
+
+    JSON payload:
+    - stop: int node index (vendor node id)
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        if APP_STATE['routes'] is None:
+            return jsonify({'success': False, 'error': 'No cached plan. Run /api/optimize first.'}), 400
+
+        stop = int(payload.get('stop', -1))
+        if stop < 1:
+            return jsonify({'success': False, 'error': 'Invalid stop'}), 400
+
+        result = remove_stop(routes=APP_STATE['routes'], stop=stop)
+        if result.get('success'):
+            APP_STATE['routes'] = result['routes']
+            # Update statuses compared to original
+            orig_set = set(APP_STATE.get('original_used_vendors') or [])
+            cur_set = set()
+            for r in APP_STATE['routes']:
+                for n in r:
+                    if n != 0:
+                        cur_set.add(int(n))
+            # nodes in original but not current are removed
+            statuses = {int(n): ('original' if n in cur_set else 'removed') for n in orig_set}
+            for n in cur_set:
+                if n not in statuses:
+                    statuses[int(n)] = 'added'
+            APP_STATE['statuses'] = statuses
+            return jsonify(result), 200
+        return jsonify(result), 404
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/runs', methods=['GET'])
+def list_all_runs():
+    """List all saved runs (metadata only)."""
+    try:
+        runs = list_runs()
+        return jsonify({'success': True, 'runs': runs}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/runs/load', methods=['POST'])
+def load_run_into_state():
+    """Load a run by id and set APP_STATE from disk."""
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        run_id = payload.get('run_id')
+        if not run_id:
+            return jsonify({'success': False, 'error': 'run_id required'}), 400
+        data = load_run(run_id)
+        if not data.get('success'):
+            return jsonify(data), 404
+        state = data['state']
+        APP_STATE['routes'] = state.get('routes')
+        APP_STATE['distance_matrix'] = state.get('distance_matrix')
+        APP_STATE['capacity_matrix'] = state.get('capacity_matrix')
+        APP_STATE['loading_matrix'] = state.get('loading_matrix')
+        APP_STATE['frozen_prefix'] = state.get('frozen_prefix')
+        return jsonify({'success': True, 'run': data['metadata'], 'routes': APP_STATE['routes']}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/runs/<run_id>', methods=['DELETE'])
+def delete_run(run_id):
+    """Delete a saved run."""
+    try:
+        import shutil
+        run_dir = os.path.join('results', 'runs', run_id)
+        
+        if not os.path.exists(run_dir):
+            return jsonify({'success': False, 'error': 'Run not found'}), 404
+        
+        # Delete the entire run directory
+        shutil.rmtree(run_dir)
+        print(f"Deleted run: {run_id}")
+        
+        return jsonify({'success': True, 'run_id': run_id}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/runs/save', methods=['POST'])
+def save_current_state_as_run():
+    """Save current APP_STATE as a new run with a provided name."""
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        name = payload.get('name') or f"Run {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        base_run_id = payload.get('base_run_id')
+        
+        print(f"\n=== SAVE RUN DEBUG ===")
+        print(f"Saving run with name: {name}")
+        print(f"Payload csv_filepath: {payload.get('csv_filepath')}")
+        print(f"APP_STATE csv_filepath: {APP_STATE.get('csv_filepath')}")
+        print(f"APP_STATE map_path: {APP_STATE.get('map_path')}")
+        print(f"APP_STATE routes: {len(APP_STATE.get('routes', [])) if APP_STATE.get('routes') else 0} routes")
+        
+        # Include map_path and csv_filepath from APP_STATE if available
+        meta = {
+            'base_run_id': base_run_id,
+            'created_at': datetime.now().isoformat(),
+            'original_used_vendors': APP_STATE.get('original_used_vendors'),
+            'map_path': APP_STATE.get('map_path'),  # Include map for copying
+            'csv_filepath': payload.get('csv_filepath') or APP_STATE.get('csv_filepath'),  # From frontend or APP_STATE
+        }
+        
+        print(f"Metadata map_path: {meta['map_path']}")
+        print(f"Metadata csv_filepath: {meta['csv_filepath']}")
+        
+        run_id = generate_run_id('run')
+        res = save_run(run_id, name, APP_STATE, meta)
+        
+        print(f"Save result: {res}")
+        print(f"=== END SAVE RUN DEBUG ===\n")
+        
+        return jsonify({'success': True, 'run_id': run_id, 'name': name}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/runs/download-input/<run_id>', methods=['GET'])
+def download_run_input(run_id):
+    """Return input CSV for a run, with an added running_status column."""
+    try:
+        data = load_run(run_id)
+        if not data.get('success'):
+            return jsonify(data), 404
+        meta = data['metadata']
+        state = data['state']
+        input_csv = meta.get('input_csv_path')
+        if not input_csv or not os.path.exists(input_csv):
+            return jsonify({'success': False, 'error': 'No input CSV found for run'}), 404
+        df = pd.read_csv(input_csv)
+        
+        print(f"\n=== DOWNLOAD CSV DEBUG ({run_id}) ===")
+        print(f"Total rows in CSV: {len(df)}")
+        
+        # Build statuses: use THIS run's routes, not APP_STATE
+        orig_set = set(meta.get('original_used_vendors') or [])
+        print(f"Original used vendors: {sorted(orig_set)}")
+        
+        # Get vendors from THIS run's routes
+        run_routes = state.get('routes', [])
+        cur_set = set()
+        if run_routes:
+            for r in run_routes:
+                for n in r:
+                    if n != 0:
+                        cur_set.add(int(n))
+        
+        print(f"Vendors in current routes: {sorted(cur_set)}")
+        
+        # Mark all vendors based on their status in THIS run
+        # For a fresh optimization, original_used_vendors should match cur_set
+        # Only differences indicate manual edits
+        
+        if not orig_set:
+            # No original tracking - mark all as original
+            print("No original_used_vendors found - marking all as original")
+            df['running_status'] = 'original'
+        elif not cur_set:
+            # No routes - mark all as original
+            print("No routes found - marking all as original")
+            df['running_status'] = 'original'
+        else:
+            # Compare original vs current
+            # Node IDs start from 1 for vendors (0 is depot)
+            # But they correspond to row indices in the dataframe
+            df['running_status'] = df.index.map(lambda idx: 
+                'removed' if (idx + 1) in orig_set and (idx + 1) not in cur_set else
+                'added' if (idx + 1) in cur_set and (idx + 1) not in orig_set else
+                'original' if (idx + 1) in orig_set and (idx + 1) in cur_set else
+                'original'  # Default for rows not in routes
+            )
+        
+        print(f"Status distribution: {df['running_status'].value_counts().to_dict()}")
+        print(f"=== END DOWNLOAD CSV DEBUG ===\n")
+        
+        # Serve as CSV with run_id in filename
+        out_path = os.path.join('results', 'runs', run_id, 'input_with_status.csv')
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        df.to_csv(out_path, index=False)
+        
+        # Custom filename for download
+        download_filename = f"{run_id}_input.csv"
+        return send_from_directory(
+            os.path.dirname(out_path), 
+            os.path.basename(out_path), 
+            as_attachment=True,
+            download_name=download_filename
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/runs/rerun', methods=['POST'])
+def rerun_from_dataset():
+    """Re-run optimization using a saved run's dataset and (optionally) new parameters."""
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+        run_id = payload.get('run_id')
+        if not run_id:
+            return jsonify({'success': False, 'error': 'run_id required'}), 400
+        data = load_run(run_id)
+        if not data.get('success'):
+            return jsonify(data), 404
+        meta = data['metadata']
+        csv_path = meta.get('input_csv_path') or meta.get('csv_filepath')
+        if not csv_path or not os.path.exists(csv_path):
+            return jsonify({'success': False, 'error': 'dataset not found for run'}), 404
+        # Forward to optimize endpoint so the same logic runs and a new run is saved
+        params = payload.get('parameters', {})
+        optimize_url = request.host_url.rstrip('/') + '/api/optimize'
+        resp = requests.post(optimize_url, json={
+            'vendors': [],
+            'parameters': params,
+            'csv_filepath': csv_path,
+        })
+        if resp.status_code != 200:
+            try:
+                return jsonify(resp.json()), resp.status_code
+            except Exception:
+                return jsonify({'success': False, 'error': 'Optimize call failed', 'status_code': resp.status_code}), 500
+        result = resp.json()
+        return jsonify({'success': True, 'result': result, 'new_run_id': result.get('run_id')}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -472,4 +968,5 @@ def health_check():
 if __name__ == '__main__':
     print("🚀 Starting Parcel Delivery Optimizer Server...")
     print("📍 Open http://localhost:8080 in your browser")
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    # Disable debug reloader for stable single-process listening
+    app.run(debug=False, use_reloader=False, host='0.0.0.0', port=8080, threaded=True)
